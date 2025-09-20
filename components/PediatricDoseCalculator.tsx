@@ -11,7 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
-import { Moon, Sun, Printer, Search, X } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Moon, Sun, Printer, Search, X, AlertTriangle, Info, Calculator, History, BookOpen, Shield } from "lucide-react"
 import { calculateDose } from "../utils/doseCalculator"
 import { medicationData } from "../data/medicationData"
 import { fetchDrugInfo, fetchDrugInteractions } from "../utils/openFdaApi"
@@ -23,6 +24,8 @@ type SavedCalculation = {
   dose: string
   doseMl: string
   frequency: string
+  patientAge: string
+  patientWeight: string
 }
 
 type DrugInfo = {
@@ -39,23 +42,39 @@ type DrugInfo = {
   pediatricUse: string
 }
 
+type PatientProfile = {
+  id: string
+  name: string
+  dateOfBirth: string
+  weight: string
+  allergies: string[]
+  medicalConditions: string[]
+}
+
 export function PediatricDoseCalculator() {
   const [formInputs, setFormInputs] = useState({
     ageYears: "",
     ageMonths: "",
     weightKg: "",
     medication: "",
+    indication: "",
+    patientName: "",
   })
   const [result, setResult] = useState<any>(null)
   const [activeTab, setActiveTab] = useState("antibiotics")
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
   const [savedCalculations, setSavedCalculations] = useState<SavedCalculation[]>([])
+  const [patientProfiles, setPatientProfiles] = useState<PatientProfile[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [showSearchDropdown, setShowSearchDropdown] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [drugInfo, setDrugInfo] = useState<DrugInfo | null>(null)
   const [drugInteractions, setDrugInteractions] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [showDosageChart, setShowDosageChart] = useState(false)
+  const [calculationHistory, setCalculationHistory] = useState<SavedCalculation[]>([])
+  const [selectedPatient, setSelectedPatient] = useState<PatientProfile | null>(null)
+  const [showSafetyAlerts, setShowSafetyAlerts] = useState(true)
   const printRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLDivElement>(null)
 
@@ -63,6 +82,11 @@ export function PediatricDoseCalculator() {
     const saved = localStorage.getItem("savedCalculations")
     if (saved) {
       setSavedCalculations(JSON.parse(saved))
+      setCalculationHistory(JSON.parse(saved))
+    }
+    const profiles = localStorage.getItem("patientProfiles")
+    if (profiles) {
+      setPatientProfiles(JSON.parse(profiles))
     }
     const darkMode = localStorage.getItem("darkMode")
     if (darkMode) {
@@ -111,31 +135,81 @@ export function PediatricDoseCalculator() {
     if (!formInputs.medication) {
       newErrors.medication = "Please select a medication"
     }
+
+    // Enhanced validation
+    const weight = Number.parseFloat(formInputs.weightKg)
+    const ageYears = Number.parseInt(formInputs.ageYears) || 0
+    const ageMonths = Number.parseInt(formInputs.ageMonths) || 0
+
+    if (weight < 0.5 || weight > 150) {
+      newErrors.weightKg = "Weight should be between 0.5kg and 150kg"
+    }
+
+    if (ageYears > 18) {
+      newErrors.age = "This calculator is for pediatric patients (≤18 years)"
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
+  }
+
+  const getSafetyAlerts = (medication: string, weight: number, ageInMonths: number) => {
+    const alerts = []
+
+    // Age-based alerts
+    if (ageInMonths < 1) {
+      alerts.push({
+        type: "warning",
+        message: "Neonatal dosing requires special consideration. Consult pediatric specialist.",
+        icon: <AlertTriangle className="h-4 w-4" />,
+      })
+    }
+
+    // Weight-based alerts
+    if (weight < 2.5) {
+      alerts.push({
+        type: "warning",
+        message: "Low birth weight patient. Consider dose adjustment.",
+        icon: <AlertTriangle className="h-4 w-4" />,
+      })
+    }
+
+    // Medication-specific alerts
+    if (medication.toLowerCase().includes("aspirin") && ageInMonths < 144) {
+      alerts.push({
+        type: "error",
+        message: "Aspirin contraindicated in children <12 years due to Reye's syndrome risk.",
+        icon: <Shield className="h-4 w-4" />,
+      })
+    }
+
+    return alerts
   }
 
   const handleCalculate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (validateForm()) {
-      const { ageYears, ageMonths, weightKg, medication } = formInputs
+      const { ageYears, ageMonths, weightKg, medication, indication, patientName } = formInputs
       try {
         setIsLoading(true)
         const totalAgeInMonths = (Number.parseInt(ageYears) || 0) * 12 + (Number.parseInt(ageMonths) || 0)
         const calculationResult = calculateDose(medication, Number.parseFloat(weightKg), totalAgeInMonths)
+
+        // Add safety alerts
+        const safetyAlerts = getSafetyAlerts(medication, Number.parseFloat(weightKg), totalAgeInMonths)
+        calculationResult.safetyAlerts = safetyAlerts
+
         setResult(calculationResult)
 
-        // Fetch drug information from OpenFDA API with better error handling
+        // Fetch drug information
         try {
           const drugInfoResult = await fetchDrugInfo(medication)
           setDrugInfo(drugInfoResult)
 
-          // Fetch drug interactions
           const interactionsResult = await fetchDrugInteractions(medication)
           setDrugInteractions(interactionsResult)
         } catch (apiError) {
           console.warn("FDA API unavailable, continuing without drug information:", apiError)
-          // Set a fallback message instead of showing an error
           setDrugInfo({
             drugName: medication,
             genericName: "API unavailable",
@@ -159,21 +233,6 @@ export function PediatricDoseCalculator() {
     }
   }
 
-  const handleClear = () => {
-    setFormInputs({
-      ageYears: "",
-      ageMonths: "",
-      weightKg: "",
-      medication: "",
-    })
-    setResult(null)
-    setDrugInfo(null)
-    setDrugInteractions([])
-    setErrors({})
-    setSearchTerm("")
-    setShowSearchDropdown(false)
-  }
-
   const handleSave = () => {
     if (result) {
       const newCalculation: SavedCalculation = {
@@ -183,11 +242,56 @@ export function PediatricDoseCalculator() {
         dose: `${result.dose} mg daily`,
         doseMl: `${result.doseMl} mL`,
         frequency: result.frequency,
+        patientAge: `${formInputs.ageYears || 0}y ${formInputs.ageMonths || 0}m`,
+        patientWeight: `${formInputs.weightKg}kg`,
       }
       const updatedCalculations = [...savedCalculations, newCalculation]
       setSavedCalculations(updatedCalculations)
-      localStorage.setItem("savedCalculations", JSON.stringify(updatedCalculations))
+      setCalculationHistory(updatedCalculations)
+      localStorage.setItem("savedCalculations", JSON.JSON.stringify(updatedCalculations))
     }
+  }
+
+  const savePatientProfile = () => {
+    if (formInputs.patientName && formInputs.weightKg && (formInputs.ageYears || formInputs.ageMonths)) {
+      const newProfile: PatientProfile = {
+        id: Date.now().toString(),
+        name: formInputs.patientName,
+        dateOfBirth: calculateDateOfBirth(
+          Number.parseInt(formInputs.ageYears) || 0,
+          Number.parseInt(formInputs.ageMonths) || 0,
+        ),
+        weight: formInputs.weightKg,
+        allergies: [],
+        medicalConditions: [],
+      }
+      const updatedProfiles = [...patientProfiles, newProfile]
+      setPatientProfiles(updatedProfiles)
+      localStorage.setItem("patientProfiles", JSON.JSON.stringify(updatedProfiles))
+    }
+  }
+
+  const calculateDateOfBirth = (years: number, months: number) => {
+    const now = new Date()
+    const birthDate = new Date(now.getFullYear() - years, now.getMonth() - months, now.getDate())
+    return birthDate.toISOString().split("T")[0]
+  }
+
+  const loadPatientProfile = (profile: PatientProfile) => {
+    const today = new Date()
+    const birthDate = new Date(profile.dateOfBirth)
+    const ageInMonths = (today.getFullYear() - birthDate.getFullYear()) * 12 + (today.getMonth() - birthDate.getMonth())
+    const ageYears = Math.floor(ageInMonths / 12)
+    const remainingMonths = ageInMonths % 12
+
+    setFormInputs((prev) => ({
+      ...prev,
+      patientName: profile.name,
+      ageYears: ageYears.toString(),
+      ageMonths: remainingMonths.toString(),
+      weightKg: profile.weight,
+    }))
+    setSelectedPatient(profile)
   }
 
   // Get filtered medications based on search term
@@ -219,16 +323,40 @@ export function PediatricDoseCalculator() {
     updateFormInput("medication", "")
   }
 
+  const handleClear = () => {
+    setFormInputs({
+      ageYears: "",
+      ageMonths: "",
+      weightKg: "",
+      medication: "",
+      indication: "",
+      patientName: "",
+    })
+    setResult(null)
+    setDrugInfo(null)
+    setDrugInteractions([])
+    setErrors({})
+    setSearchTerm("")
+    setShowSearchDropdown(false)
+    setSelectedPatient(null)
+  }
+
   const handlePrint = () => {
     if (printRef.current) {
       const content = printRef.current
       const printWindow = window.open("", "_blank")
       if (printWindow) {
-        printWindow.document.write("<html><head><title>Print</title>")
+        printWindow.document.write("<html><head><title>Pediatric Dose Calculation Report</title>")
         printWindow.document.write(
-          "<style>body { font-family: Arial, sans-serif; } table { border-collapse: collapse; width: 100%; } th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }</style>",
+          "<style>body { font-family: Arial, sans-serif; margin: 20px; } table { border-collapse: collapse; width: 100%; } th, td { border: 1px solid #ddd; padding: 8px; text-align: left; } .header { text-align: center; margin-bottom: 20px; } .patient-info { background-color: #f5f5f5; padding: 10px; margin-bottom: 20px; }</style>",
         )
         printWindow.document.write("</head><body>")
+        printWindow.document.write(`
+          <div class="header">
+            <h1>Pediatric Dose Calculation Report</h1>
+            <p>Generated on: ${new Date().toLocaleString()}</p>
+          </div>
+        `)
         printWindow.document.write(content.innerHTML)
         printWindow.document.write("</body></html>")
         printWindow.document.close()
@@ -247,10 +375,68 @@ export function PediatricDoseCalculator() {
 
   const renderMedicationForm = () => (
     <form onSubmit={handleCalculate} className="space-y-4">
+      {/* Patient Information Section */}
+      <Card className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+        <h4 className="font-semibold mb-3 flex items-center gap-2 text-blue-900 dark:text-blue-100">
+          <Info className="h-4 w-4" />
+          Patient Information
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="patientName" className="dark:text-white">
+              Patient Name (Optional)
+            </Label>
+            <Input
+              id="patientName"
+              type="text"
+              value={formInputs.patientName}
+              onChange={(e) => updateFormInput("patientName", e.target.value)}
+              placeholder="Enter patient name"
+              className="dark:bg-gray-700 dark:text-white"
+            />
+          </div>
+          <div>
+            <Label htmlFor="indication" className="dark:text-white">
+              Indication (Optional)
+            </Label>
+            <Input
+              id="indication"
+              type="text"
+              value={formInputs.indication}
+              onChange={(e) => updateFormInput("indication", e.target.value)}
+              placeholder="e.g., UTI, pneumonia"
+              className="dark:bg-gray-700 dark:text-white"
+            />
+          </div>
+        </div>
+      </Card>
+
+      {/* Patient Profiles */}
+      {patientProfiles.length > 0 && (
+        <Card className="p-4">
+          <h4 className="font-semibold mb-3 flex items-center gap-2">
+            <History className="h-4 w-4" />
+            Saved Patient Profiles
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {patientProfiles.map((profile) => (
+              <Badge
+                key={profile.id}
+                variant="outline"
+                className="cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900"
+                onClick={() => loadPatientProfile(profile)}
+              >
+                {profile.name} ({profile.weight}kg)
+              </Badge>
+            ))}
+          </div>
+        </Card>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label htmlFor="ageYears" className="dark:text-white">
-            Age (Years)
+            Age (Years) *
           </Label>
           <Input
             id="ageYears"
@@ -265,7 +451,7 @@ export function PediatricDoseCalculator() {
         </div>
         <div>
           <Label htmlFor="ageMonths" className="dark:text-white">
-            Age (Months)
+            Age (Months) *
           </Label>
           <Input
             id="ageMonths"
@@ -281,13 +467,15 @@ export function PediatricDoseCalculator() {
       </div>
       {errors.age && (
         <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{errors.age}</AlertDescription>
         </Alert>
       )}
+
       <div>
         <Label htmlFor="weightKg" className="dark:text-white">
-          Weight (kg)
+          Weight (kg) *
         </Label>
         <Input
           id="weightKg"
@@ -301,15 +489,17 @@ export function PediatricDoseCalculator() {
           className="dark:bg-gray-700 dark:text-white"
         />
         {errors.weightKg && (
-          <Alert variant="destructive">
+          <Alert variant="destructive" className="mt-2">
+            <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>{errors.weightKg}</AlertDescription>
           </Alert>
         )}
       </div>
+
       <div>
         <Label htmlFor="medicationSearch" className="dark:text-white">
-          Search & Select Medication
+          Search & Select Medication *
         </Label>
         <div className="relative" ref={searchRef}>
           <div className="relative">
@@ -379,11 +569,13 @@ export function PediatricDoseCalculator() {
 
         {errors.medication && (
           <Alert variant="destructive" className="mt-2">
+            <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>{errors.medication}</AlertDescription>
           </Alert>
         )}
       </div>
+
       <div className="flex gap-2">
         <Button
           type="submit"
@@ -396,7 +588,10 @@ export function PediatricDoseCalculator() {
               Calculating...
             </div>
           ) : (
-            "Calculate Dose"
+            <>
+              <Calculator className="h-4 w-4 mr-2" />
+              Calculate Dose
+            </>
           )}
         </Button>
         <Button
@@ -408,22 +603,38 @@ export function PediatricDoseCalculator() {
           Clear
         </Button>
       </div>
+
+      {formInputs.patientName && (
+        <Button type="button" variant="outline" onClick={savePatientProfile} className="w-full bg-transparent">
+          Save Patient Profile
+        </Button>
+      )}
     </form>
   )
 
   return (
     <div className={`container mx-auto p-4 ${isDarkMode ? "dark" : ""}`}>
-      <div className="flex justify-end mb-4">
-        <div className="flex items-center space-x-2">
-          <Sun className="h-4 w-4" />
-          <Switch checked={isDarkMode} onCheckedChange={setIsDarkMode} aria-label="Toggle dark mode" />
-          <Moon className="h-4 w-4" />
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Pediatric Dose Calculator</h1>
+        <div className="flex items-center space-x-4">
+          <Badge variant="secondary" className="text-xs">
+            v2.0 Enhanced
+          </Badge>
+          <div className="flex items-center space-x-2">
+            <Sun className="h-4 w-4" />
+            <Switch checked={isDarkMode} onCheckedChange={setIsDarkMode} aria-label="Toggle dark mode" />
+            <Moon className="h-4 w-4" />
+          </div>
         </div>
       </div>
+
       <div className="flex flex-col lg:flex-row gap-6">
         <Card className="w-full lg:w-2/3 dark:bg-gray-800">
           <CardHeader>
-            <CardTitle className="text-2xl font-bold text-center dark:text-white">Pediatric Dose Calculator</CardTitle>
+            <CardTitle className="text-2xl font-bold text-center dark:text-white flex items-center justify-center gap-2">
+              <Calculator className="h-6 w-6" />
+              Dose Calculator
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={handleTabChange}>
@@ -434,57 +645,121 @@ export function PediatricDoseCalculator() {
               <TabsContent value="antibiotics">{renderMedicationForm()}</TabsContent>
               <TabsContent value="other">{renderMedicationForm()}</TabsContent>
             </Tabs>
+
+            {/* Safety Alerts */}
+            {result && result.safetyAlerts && result.safetyAlerts.length > 0 && showSafetyAlerts && (
+              <div className="mt-4 space-y-2">
+                {result.safetyAlerts.map((alert: any, index: number) => (
+                  <Alert
+                    key={index}
+                    variant={alert.type === "error" ? "destructive" : "default"}
+                    className="border-l-4 border-l-orange-500"
+                  >
+                    <div className="flex items-center gap-2">
+                      {alert.icon}
+                      <AlertDescription className="font-medium">{alert.message}</AlertDescription>
+                    </div>
+                  </Alert>
+                ))}
+              </div>
+            )}
+
             {result && (
               <div className="mt-4 p-4 bg-gray-100 rounded-md dark:bg-gray-700 dark:text-white">
-                <h3 className="font-bold text-lg mb-2">Result:</h3>
-                <p>
-                  <strong>Dose:</strong> {result.dose} mg daily
-                </p>
-                <p>
-                  <strong>Dose in mL:</strong> {result.doseMl} mL
-                </p>
-                <p>
-                  <strong>Frequency:</strong> {result.frequency}
-                </p>
-                <p>
-                  <strong>Reference:</strong> {result.reference}
-                </p>
-                {result.comment && (
-                  <p>
-                    <strong>Comment:</strong> {result.comment}
-                  </p>
-                )}
-                <a
-                  href={result.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline dark:text-blue-400"
-                >
-                  {result.referenceLabel}
-                </a>
-                <div className="flex gap-2 mt-2">
-                  <Button onClick={handleSave}>Save Calculation</Button>
-                  <Button onClick={handlePrint} className="flex items-center gap-2">
+                <div ref={printRef}>
+                  {formInputs.patientName && (
+                    <div className="patient-info mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded">
+                      <h4 className="font-semibold text-blue-900 dark:text-blue-100">Patient Information</h4>
+                      <p>
+                        <strong>Name:</strong> {formInputs.patientName}
+                      </p>
+                      <p>
+                        <strong>Age:</strong> {formInputs.ageYears || 0} years, {formInputs.ageMonths || 0} months
+                      </p>
+                      <p>
+                        <strong>Weight:</strong> {formInputs.weightKg} kg
+                      </p>
+                      {formInputs.indication && (
+                        <p>
+                          <strong>Indication:</strong> {formInputs.indication}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
+                    <Calculator className="h-5 w-5" />
+                    Calculation Result:
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <p>
+                        <strong>Medication:</strong> {formInputs.medication}
+                      </p>
+                      <p>
+                        <strong>Dose:</strong> {result.dose} mg daily
+                      </p>
+                      <p>
+                        <strong>Dose in mL:</strong> {result.doseMl} mL
+                      </p>
+                      <p>
+                        <strong>Frequency:</strong> {result.frequency}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <p>
+                        <strong>Reference:</strong> {result.reference}
+                      </p>
+                      {result.comment && (
+                        <p>
+                          <strong>Comment:</strong> {result.comment}
+                        </p>
+                      )}
+                      <p>
+                        <strong>Calculated on:</strong> {new Date().toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  <a
+                    href={result.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline dark:text-blue-400 inline-flex items-center gap-1 mt-2"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    {result.referenceLabel}
+                  </a>
+                </div>
+
+                <div className="flex gap-2 mt-4">
+                  <Button onClick={handleSave} className="flex items-center gap-2">
+                    <History className="h-4 w-4" />
+                    Save Calculation
+                  </Button>
+                  <Button onClick={handlePrint} className="flex items-center gap-2 bg-transparent" variant="outline">
                     <Printer className="h-4 w-4" />
-                    Print
+                    Print Report
                   </Button>
                 </div>
               </div>
             )}
+
             {drugInfo && drugInfo.drugName && (
               <div className="mt-4 p-4 bg-gray-100 rounded-md dark:bg-gray-700 dark:text-white">
-                <h3 className="font-bold text-lg mb-2">
+                <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
+                  <BookOpen className="h-5 w-5" />
                   Drug Information: {drugInfo.brandName || drugInfo.drugName} ({drugInfo.genericName || "N/A"})
                 </h3>
                 <Tabs defaultValue="indications">
-                  <TabsList>
+                  <TabsList className="grid grid-cols-4 lg:grid-cols-7">
                     <TabsTrigger value="indications">Indications</TabsTrigger>
-                    <TabsTrigger value="dosage">Dosage & Administration</TabsTrigger>
+                    <TabsTrigger value="dosage">Dosage</TabsTrigger>
                     <TabsTrigger value="warnings">Warnings</TabsTrigger>
                     <TabsTrigger value="precautions">Precautions</TabsTrigger>
                     <TabsTrigger value="interactions">Interactions</TabsTrigger>
-                    <TabsTrigger value="adverse">Adverse Events</TabsTrigger>
-                    <TabsTrigger value="pediatric">Pediatric Use</TabsTrigger>
+                    <TabsTrigger value="adverse">Adverse</TabsTrigger>
+                    <TabsTrigger value="pediatric">Pediatric</TabsTrigger>
                   </TabsList>
                   <TabsContent value="indications">
                     <ScrollArea className="h-[300px] p-4">
@@ -514,7 +789,10 @@ export function PediatricDoseCalculator() {
                   </TabsContent>
                   <TabsContent value="warnings">
                     <ScrollArea className="h-[300px] p-4">
-                      <h4 className="font-semibold mb-2">Warnings</h4>
+                      <h4 className="font-semibold mb-2 flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-red-500" />
+                        Warnings
+                      </h4>
                       <ul className="list-disc pl-5 space-y-2">
                         {drugInfo.warnings &&
                         drugInfo.warnings !== "No information available" &&
@@ -535,7 +813,10 @@ export function PediatricDoseCalculator() {
                   </TabsContent>
                   <TabsContent value="precautions">
                     <ScrollArea className="h-[300px] p-4">
-                      <h4 className="font-semibold mb-2">Precautions</h4>
+                      <h4 className="font-semibold mb-2 flex items-center gap-2">
+                        <Shield className="h-4 w-4 text-yellow-500" />
+                        Precautions
+                      </h4>
                       <ul className="list-disc pl-5 space-y-2">
                         {drugInfo.precautions &&
                         drugInfo.precautions !== "No information available" &&
@@ -613,9 +894,13 @@ export function PediatricDoseCalculator() {
             )}
           </CardContent>
         </Card>
+
         <Card className="w-full lg:w-1/3 dark:bg-gray-800">
           <CardHeader>
-            <CardTitle className="text-xl font-bold dark:text-white">Reference Summary</CardTitle>
+            <CardTitle className="text-xl font-bold dark:text-white flex items-center gap-2">
+              <BookOpen className="h-5 w-5" />
+              Reference Summary
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-[calc(100vh-200px)]">
@@ -625,7 +910,10 @@ export function PediatricDoseCalculator() {
                     <h3 className="font-semibold mb-2 dark:text-white">Antibiotics</h3>
                     <ul className="space-y-2">
                       {medicationData.antibiotics.map((med) => (
-                        <li key={med.name} className="text-sm dark:text-gray-300">
+                        <li
+                          key={med.name}
+                          className="text-sm dark:text-gray-300 p-2 border rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                        >
                           <strong>{med.name}:</strong> {med.reference}
                         </li>
                       ))}
@@ -637,7 +925,10 @@ export function PediatricDoseCalculator() {
                     <h3 className="font-semibold mb-2 dark:text-white">Other Medications</h3>
                     <ul className="space-y-2">
                       {medicationData.other.map((med) => (
-                        <li key={med.name} className="text-sm dark:text-gray-300">
+                        <li
+                          key={med.name}
+                          className="text-sm dark:text-gray-300 p-2 border rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                        >
                           <strong>{med.name}:</strong> {med.reference}
                         </li>
                       ))}
@@ -649,32 +940,40 @@ export function PediatricDoseCalculator() {
           </CardContent>
         </Card>
       </div>
+
       {savedCalculations.length > 0 && (
         <Card className="mt-6 dark:bg-gray-800">
           <CardHeader>
-            <CardTitle className="text-xl font-bold dark:text-white">Saved Calculations</CardTitle>
+            <CardTitle className="text-xl font-bold dark:text-white flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Calculation History ({savedCalculations.length})
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-[300px]">
-              <div ref={printRef}>
-                <table className="w-full">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
                   <thead>
-                    <tr>
-                      <th className="text-left dark:text-white">Date</th>
-                      <th className="text-left dark:text-white">Medication</th>
-                      <th className="text-left dark:text-white">Dose</th>
-                      <th className="text-left dark:text-white">Dose (mL)</th>
-                      <th className="text-left dark:text-white">Frequency</th>
+                    <tr className="border-b">
+                      <th className="text-left p-2 dark:text-white">Date</th>
+                      <th className="text-left p-2 dark:text-white">Patient</th>
+                      <th className="text-left p-2 dark:text-white">Medication</th>
+                      <th className="text-left p-2 dark:text-white">Dose</th>
+                      <th className="text-left p-2 dark:text-white">Volume</th>
+                      <th className="text-left p-2 dark:text-white">Frequency</th>
                     </tr>
                   </thead>
                   <tbody>
                     {savedCalculations.map((calc) => (
-                      <tr key={calc.id} className="dark:text-gray-300">
-                        <td>{calc.date}</td>
-                        <td>{calc.medication}</td>
-                        <td>{calc.dose}</td>
-                        <td>{calc.doseMl}</td>
-                        <td>{calc.frequency}</td>
+                      <tr key={calc.id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-300">
+                        <td className="p-2">{calc.date}</td>
+                        <td className="p-2">
+                          {calc.patientAge} / {calc.patientWeight}
+                        </td>
+                        <td className="p-2">{calc.medication}</td>
+                        <td className="p-2">{calc.dose}</td>
+                        <td className="p-2">{calc.doseMl}</td>
+                        <td className="p-2">{calc.frequency}</td>
                       </tr>
                     ))}
                   </tbody>
