@@ -12,7 +12,20 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { Moon, Sun, Printer, Search, X, AlertTriangle, Info, Calculator, History, BookOpen, Shield } from "lucide-react"
+import {
+  Moon,
+  Sun,
+  Printer,
+  Search,
+  X,
+  AlertTriangle,
+  Info,
+  Calculator,
+  History,
+  BookOpen,
+  Shield,
+  TrendingUp,
+} from "lucide-react"
 import { calculateDose } from "../utils/doseCalculator"
 import { medicationData } from "../data/medicationData"
 import { fetchDrugInfo, fetchDrugInteractions } from "../utils/openFdaApi"
@@ -781,14 +794,51 @@ export function PediatricDoseCalculator() {
                   </TabsContent>
                   <TabsContent value="dosage">
                     <ScrollArea className="h-[300px] p-4">
-                      <h4 className="font-semibold mb-2">Dosage and Administration</h4>
-                      <ul className="list-disc pl-5 space-y-1">
-                        {(drugInfo.dosageAdministration || "No information available")
-                          .split("\n")
-                          .filter(Boolean)
-                          .map((item, index) => (
-                            <li key={index}>{item}</li>
-                          ))}
+                      <h4 className="font-semibold mb-2 flex items-center gap-2">
+                        <Calculator className="h-4 w-4 text-blue-500" />
+                        Dosage and Administration
+                      </h4>
+                      <ul className="space-y-3">
+                        {drugInfo.dosageAdministration &&
+                        drugInfo.dosageAdministration !== "No information available" &&
+                        drugInfo.dosageAdministration !==
+                          "Please consult prescribing information for dosage and administration details." ? (
+                          drugInfo.dosageAdministration
+                            .split(/(?<=[.!?])\s+/)
+                            .filter((sentence) => sentence.trim().length > 10)
+                            .map((sentence, index) => {
+                              const cleanSentence = sentence
+                                .trim()
+                                .replace(/^\d+\.\s*/, "")
+                                .replace(/^$$\d+$$\s*/, "")
+                              return (
+                                <li key={index} className="flex items-start gap-2 text-sm leading-relaxed">
+                                  <div className="flex-shrink-0 mt-1">
+                                    {cleanSentence.toLowerCase().includes("pediatric") ||
+                                    cleanSentence.toLowerCase().includes("child") ? (
+                                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                    ) : cleanSentence.toLowerCase().includes("adult") ? (
+                                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                                    ) : cleanSentence.toLowerCase().includes("dose") ||
+                                      cleanSentence.toLowerCase().includes("mg") ? (
+                                      <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                                    ) : cleanSentence.toLowerCase().includes("administration") ||
+                                      cleanSentence.toLowerCase().includes("take") ? (
+                                      <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                                    ) : (
+                                      <div className="w-2 h-2 rounded-full bg-gray-400"></div>
+                                    )}
+                                  </div>
+                                  <span>{cleanSentence}</span>
+                                </li>
+                              )
+                            })
+                        ) : (
+                          <li className="flex items-start gap-2 text-sm text-gray-500">
+                            <div className="w-2 h-2 rounded-full bg-gray-300 mt-1 flex-shrink-0"></div>
+                            <span>No dosage information available</span>
+                          </li>
+                        )}
                       </ul>
                     </ScrollArea>
                   </TabsContent>
@@ -842,25 +892,82 @@ export function PediatricDoseCalculator() {
                   </TabsContent>
                   <TabsContent value="interactions">
                     <ScrollArea className="h-[300px] p-4">
-                      <h4 className="font-semibold mb-2">Drug Interactions</h4>
-                      <ul className="list-disc pl-5 space-y-1">
-                        {(drugInfo.interactions || "No information available")
-                          .split("\n")
-                          .filter(Boolean)
-                          .map((item, index) => (
-                            <li key={index}>{item}</li>
-                          ))}
+                      <h4 className="font-semibold mb-2 flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                        Drug Interactions
+                      </h4>
+                      <ul className="space-y-3">
+                        {drugInfo.interactions &&
+                        drugInfo.interactions !== "No information available" &&
+                        drugInfo.interactions !==
+                          "Please consult prescribing information for drug interaction information." ? (
+                          drugInfo.interactions
+                            .split(/(?<=[.!?])\s+/)
+                            .filter((sentence) => sentence.trim().length > 15)
+                            .map((sentence, index) => {
+                              const cleanSentence = sentence
+                                .trim()
+                                .replace(/^\d+\.\s*/, "")
+                                .replace(/^$$\d+$$\s*/, "")
+                              return (
+                                <li key={index} className="flex items-start gap-2 text-sm leading-relaxed">
+                                  <div className="flex-shrink-0 mt-1">
+                                    {cleanSentence.toLowerCase().includes("contraindicated") ||
+                                    cleanSentence.toLowerCase().includes("avoid") ? (
+                                      <Shield className="h-3 w-3 text-red-500" />
+                                    ) : cleanSentence.toLowerCase().includes("caution") ||
+                                      cleanSentence.toLowerCase().includes("monitor") ? (
+                                      <AlertTriangle className="h-3 w-3 text-yellow-500" />
+                                    ) : cleanSentence.toLowerCase().includes("increase") ||
+                                      cleanSentence.toLowerCase().includes("decrease") ? (
+                                      <TrendingUp className="h-3 w-3 text-blue-500" />
+                                    ) : cleanSentence.toLowerCase().includes("warfarin") ||
+                                      cleanSentence.toLowerCase().includes("anticoagulant") ? (
+                                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                                    ) : cleanSentence.toLowerCase().includes("enzyme") ||
+                                      cleanSentence.toLowerCase().includes("cyp") ? (
+                                      <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                                    ) : (
+                                      <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                                    )}
+                                  </div>
+                                  <span>{cleanSentence}</span>
+                                </li>
+                              )
+                            })
+                        ) : (
+                          <li className="flex items-start gap-2 text-sm text-gray-500">
+                            <div className="w-3 h-3 rounded-full bg-gray-300 mt-1 flex-shrink-0"></div>
+                            <span>No drug interaction information available</span>
+                          </li>
+                        )}
                       </ul>
-                      {drugInteractions.length > 0 && (
-                        <>
-                          <h5 className="font-semibold mt-4 mb-2">Additional Interactions:</h5>
-                          <ul className="list-disc pl-5 space-y-1">
-                            {drugInteractions.map((interaction, index) => (
-                              <li key={index}>{interaction}</li>
-                            ))}
-                          </ul>
-                        </>
-                      )}
+                      {drugInteractions.length > 0 &&
+                        !drugInteractions.includes("Drug interaction data temporarily unavailable") &&
+                        !drugInteractions.includes("Drug interaction data not available") && (
+                          <>
+                            <h5 className="font-semibold mt-6 mb-3 flex items-center gap-2">
+                              <Info className="h-4 w-4 text-blue-500" />
+                              Additional Interactions:
+                            </h5>
+                            <ul className="space-y-3">
+                              {drugInteractions.map((interaction, index) => {
+                                const cleanInteraction = interaction
+                                  .trim()
+                                  .replace(/^\d+\.\s*/, "")
+                                  .replace(/^$$\d+$$\s*/, "")
+                                return (
+                                  <li key={index} className="flex items-start gap-2 text-sm leading-relaxed">
+                                    <div className="flex-shrink-0 mt-1">
+                                      <Info className="h-3 w-3 text-blue-500" />
+                                    </div>
+                                    <span>{cleanInteraction}</span>
+                                  </li>
+                                )
+                              })}
+                            </ul>
+                          </>
+                        )}
                     </ScrollArea>
                   </TabsContent>
                   <TabsContent value="adverse">
