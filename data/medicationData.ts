@@ -1,0 +1,32 @@
+export const medicationData = {
+  antibiotics: [
+    { name: "Augmentin 457", reference: "90 mg/kg/day (3mo-12y), 30 mg/kg/day (<3mo)" },
+    { name: "Augmentin ES 600", reference: "90 mg/kg/day (3mo-12y), 30 mg/kg/day (<3mo)" },
+    { name: "Zinnat 125", reference: "30 mg/kg/day (3mo-12y), max 1000 mg/day" },
+    { name: "Zinnat 250", reference: "30 mg/kg/day (3mo-12y), max 1000 mg/day" },
+    { name: "Klacid 125", reference: "15 mg/kg/day (3mo-12y)" },
+    { name: "Klacid 250", reference: "15 mg/kg/day (3mo-12y)" },
+    { name: "Metronidazole 125", reference: "50 mg/kg/day (3mo-12y)" },
+    { name: "Metronidazole 250", reference: "50 mg/kg/day (3mo-12y)" },
+    { name: "Zithromax", reference: "30 mg/kg/day (3mo-12y)" },
+    { name: "Suprax 100", reference: "8 mg/kg/day (3mo-12y)" },
+    { name: "Amoxicillin 250", reference: "45 mg/kg/day (3mo-12y)" },
+    { name: "Zovirax", reference: "80 mg/kg/day (2y-12y)" },
+    { name: "Septrin (SULFAMETHOXAZOLE)", reference: "100 mg/kg/day (3mo-12y)" },
+    { name: "Septrin (TRIMETHOPRIM)", reference: "20 mg/kg/day (3mo-12y)" },
+    { name: "Nystatin", reference: "800,000 units/day (<3mo), 2,400,000 units/day (3mo-12y)" },
+    { name: "Nitrofurantoin", reference: "1 mg/kg/day (3mo-12y)" },
+  ],
+  other: [
+    { name: "PANADOL BABY and INFANT 120 MG/5ML", reference: "75 mg/kg/day, max 4000 mg/day" },
+    { name: "PANADOL Elixir 240 MG/5ML", reference: "75 mg/kg/day, max 4000 mg/day" },
+    { name: "ADOL DROPS 100 MG/ML", reference: "10-15 mg/kg/dose, max 60 mg/kg/day" },
+    { name: "BRUFEN PAEDIATRIC SYRUP 100 MG/5 ML", reference: "5-10 mg/kg/dose, max 40 mg/kg/day" },
+    { name: "AERIUS  SYRUP 0.5 MG/ML", reference: "1-5 mg daily based on age" },
+    { name: "ZYRTEC SYRUP 1 MG/ML", reference: "2.5-10 mg daily based on age" },
+    { name: "DEPAKINE 57.64MG/ML SYRUP", reference: "10-30 mg/kg/day based on age" },
+    { name: "DEPAKINE DROPS 200 MG/ML", reference: "10-30 mg/kg/day based on age" },
+    { name: "TEGRETOL 100 MG/5 ML", reference: "5-10 mg/kg/day (<6y), 200 mg/day initial (≥6y)" },
+    { name: "TRILEPTAL 60 MG/ML", reference: "8-10 mg/kg/day, max 600 mg/day (≥4y)" },
+  ]
+}
