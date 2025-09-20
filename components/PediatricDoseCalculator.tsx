@@ -16,6 +16,7 @@ import { Moon, Sun, Printer, Search, X, AlertTriangle, Info, Calculator, History
 import { calculateDose } from "../utils/doseCalculator"
 import { medicationData } from "../data/medicationData"
 import { fetchDrugInfo, fetchDrugInteractions } from "../utils/openFdaApi"
+import { MedicationLearningGame } from "./MedicationLearningGame"
 
 type SavedCalculation = {
   id: string
@@ -638,12 +639,16 @@ export function PediatricDoseCalculator() {
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={handleTabChange}>
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="antibiotics">Antibiotics ({medicationData.antibiotics.length})</TabsTrigger>
                 <TabsTrigger value="other">Other Medications ({medicationData.other.length})</TabsTrigger>
+                <TabsTrigger value="game">Learning Game</TabsTrigger>
               </TabsList>
               <TabsContent value="antibiotics">{renderMedicationForm()}</TabsContent>
               <TabsContent value="other">{renderMedicationForm()}</TabsContent>
+              <TabsContent value="game">
+                <MedicationLearningGame />
+              </TabsContent>
             </Tabs>
 
             {/* Safety Alerts */}
