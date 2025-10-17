@@ -1,10 +1,13 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { PediatricDoseCalculator } from "../components/PediatricDoseCalculator"
 
 export default function Home() {
+  const [mounted, setMounted] = useState(false)
+
   useEffect(() => {
+    setMounted(true)
     // Register service worker
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
@@ -18,9 +21,11 @@ export default function Home() {
     }
   }, [])
 
+  if (!mounted) return null
+
   return (
     <main className="min-h-screen bg-background dark:bg-gray-900">
-      <PediatricDoseCalculator />
+      <PediatricDoseCalculator key="v2.1-flashcard-update" />
     </main>
   )
 }
