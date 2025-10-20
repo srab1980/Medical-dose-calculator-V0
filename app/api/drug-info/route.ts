@@ -22,7 +22,7 @@ function formatText(text: string): string {
   return text.replace(/\s+/g, " ").replace(/\n/g, "\n\n").trim()
 }
 
-async function fetchWithRetry(url: string, retries = 2): Promise<Response> {
+async function fetchWithRetry(url: string, retries = 2): Promise<Response | null> {
   for (let i = 0; i < retries; i++) {
     try {
       const controller = new AbortController()
@@ -40,19 +40,29 @@ async function fetchWithRetry(url: string, retries = 2): Promise<Response> {
       clearTimeout(timeoutId)
 
       if (response.ok) return response
-      if (response.status === 404) {
-        throw new Error("Drug not found in FDA database")
+
+      // For 404 or 429, don't retry - just return null
+      if (response.status === 404 || response.status === 429) {
+        console.log(`API returned ${response.status} for ${url}, using fallback data`)
+        return null
       }
-      if (response.status === 429) {
-        throw new Error("API rate limit exceeded")
-      }
+
+      // For other errors, retry
+      console.warn(`Attempt ${i + 1} failed with status ${response.status}`)
     } catch (error) {
       console.warn(`Fetch attempt ${i + 1} failed:`, error)
-      if (i === retries - 1) throw error
+      // Don't throw, just continue to next retry
     }
-    await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, i)))
+
+    // Wait before retrying
+    if (i < retries - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, i)))
+    }
   }
-  throw new Error(`Failed to fetch after ${retries} retries`)
+
+  // After all retries, return null instead of throwing
+  console.log(`All fetch attempts failed for ${url}, using fallback data`)
+  return null
 }
 
 function getKnownDrugMappings(): { [key: string]: { generic: string; brands: string[] } } {
@@ -217,20 +227,14 @@ function isRelevantMatch(drugName: string, labelInfo: any): boolean {
   )
 }
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const drugName = searchParams.get("drugName")
-
-  if (!drugName) {
-    return NextResponse.json({ error: "Drug name is required" }, { status: 400 })
-  }
-
+function createEnhancedFallback(drugName: string): DrugInfo {
   const mapping = extractDrugMapping(drugName)
-  const fallbackDrugInfo: DrugInfo = {
+
+  return {
     drugName: drugName,
     genericName: mapping?.generic || "Generic name not available",
     brandName: drugName,
-    adverseEvents: ["Information not available from FDA database"],
+    adverseEvents: ["Consult prescribing information for complete adverse event profile"],
     indications: "Please consult prescribing information or medical references for detailed indications.",
     warnings: "Please consult prescribing information for complete warnings and precautions.",
     precautions: "Please consult prescribing information for complete precautions.",
@@ -239,113 +243,133 @@ export async function GET(request: NextRequest) {
     contraindications: "Please consult prescribing information for contraindications.",
     pediatricUse: "Please consult prescribing information for pediatric use information.",
   }
+}
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const drugName = searchParams.get("drugName")
+
+  if (!drugName) {
+    return NextResponse.json({ error: "Drug name is required" }, { status: 400 })
+  }
+
+  // Always start with fallback data
+  const fallbackInfo = createEnhancedFallback(drugName)
 
   try {
     const searchTerms = getSearchTerms(drugName)
-    console.log(`Searching for drug: ${drugName}, using terms:`, searchTerms)
+    console.log(`🔍 Searching for drug: ${drugName}`)
 
     // Try each search term with appropriate strategy
     for (const { term, type } of searchTerms) {
       // Strategy 1: Search by brand name (only for brand terms)
       if (type === "brand" || type === "exact") {
-        try {
-          const brandUrl = `${API_BASE_URL}/label.json?search=openfda.brand_name:"${encodeURIComponent(term)}"&limit=5`
-          console.log(`Trying brand search: ${brandUrl}`)
+        const brandUrl = `${API_BASE_URL}/label.json?search=openfda.brand_name:"${encodeURIComponent(term)}"&limit=5`
 
-          const brandResponse = await fetchWithRetry(brandUrl)
-          const brandData = await brandResponse.json()
+        const brandResponse = await fetchWithRetry(brandUrl)
 
-          if (brandData.results && brandData.results.length > 0) {
-            // Check each result for relevance
-            for (const result of brandData.results) {
-              if (isRelevantMatch(drugName, result)) {
-                console.log(`Found relevant data via brand search for: ${term}`)
-                return NextResponse.json(createDrugInfo(drugName, result, term))
+        if (brandResponse && brandResponse.ok) {
+          try {
+            const brandData = await brandResponse.json()
+
+            if (brandData.results && brandData.results.length > 0) {
+              for (const result of brandData.results) {
+                if (isRelevantMatch(drugName, result)) {
+                  console.log(`✅ Found via brand search: ${term}`)
+                  return NextResponse.json(createDrugInfo(drugName, result, term))
+                }
               }
             }
+          } catch (jsonError) {
+            console.warn(`JSON parse error for brand search:`, jsonError)
           }
-        } catch (error) {
-          console.warn(`Brand search failed for ${term}:`, error)
         }
       }
 
       // Strategy 2: Search by generic name (only for generic terms)
       if (type === "generic") {
-        try {
-          const genericUrl = `${API_BASE_URL}/label.json?search=openfda.generic_name:"${encodeURIComponent(term)}"&limit=5`
-          console.log(`Trying generic search: ${genericUrl}`)
+        const genericUrl = `${API_BASE_URL}/label.json?search=openfda.generic_name:"${encodeURIComponent(term)}"&limit=5`
 
-          const genericResponse = await fetchWithRetry(genericUrl)
-          const genericData = await genericResponse.json()
+        const genericResponse = await fetchWithRetry(genericUrl)
 
-          if (genericData.results && genericData.results.length > 0) {
-            // Check each result for relevance
-            for (const result of genericData.results) {
-              if (isRelevantMatch(drugName, result)) {
-                console.log(`Found relevant data via generic search for: ${term}`)
-                return NextResponse.json(createDrugInfo(drugName, result, term))
+        if (genericResponse && genericResponse.ok) {
+          try {
+            const genericData = await genericResponse.json()
+
+            if (genericData.results && genericData.results.length > 0) {
+              for (const result of genericData.results) {
+                if (isRelevantMatch(drugName, result)) {
+                  console.log(`✅ Found via generic search: ${term}`)
+                  return NextResponse.json(createDrugInfo(drugName, result, term))
+                }
               }
             }
+          } catch (jsonError) {
+            console.warn(`JSON parse error for generic search:`, jsonError)
           }
-        } catch (error) {
-          console.warn(`Generic search failed for ${term}:`, error)
         }
       }
 
       // Strategy 3: Search in substance name (only for known generics)
       if (type === "generic") {
-        try {
-          const substanceUrl = `${API_BASE_URL}/label.json?search=openfda.substance_name:"${encodeURIComponent(term)}"&limit=5`
-          console.log(`Trying substance search: ${substanceUrl}`)
+        const substanceUrl = `${API_BASE_URL}/label.json?search=openfda.substance_name:"${encodeURIComponent(term)}"&limit=5`
 
-          const substanceResponse = await fetchWithRetry(substanceUrl)
-          const substanceData = await substanceResponse.json()
+        const substanceResponse = await fetchWithRetry(substanceUrl)
 
-          if (substanceData.results && substanceData.results.length > 0) {
-            // Check each result for relevance
-            for (const result of substanceData.results) {
-              if (isRelevantMatch(drugName, result)) {
-                console.log(`Found relevant data via substance search for: ${term}`)
-                return NextResponse.json(createDrugInfo(drugName, result, term))
+        if (substanceResponse && substanceResponse.ok) {
+          try {
+            const substanceData = await substanceResponse.json()
+
+            if (substanceData.results && substanceData.results.length > 0) {
+              for (const result of substanceData.results) {
+                if (isRelevantMatch(drugName, result)) {
+                  console.log(`✅ Found via substance search: ${term}`)
+                  return NextResponse.json(createDrugInfo(drugName, result, term))
+                }
               }
             }
+          } catch (jsonError) {
+            console.warn(`JSON parse error for substance search:`, jsonError)
           }
-        } catch (error) {
-          console.warn(`Substance search failed for ${term}:`, error)
         }
       }
     }
 
-    // If no results found, try to get adverse events data for known drugs
+    // If no results found, try adverse events (for known drugs only)
+    const mapping = extractDrugMapping(drugName)
     if (mapping) {
-      try {
-        const eventUrl = `${API_BASE_URL}/event.json?search=patient.drug.medicinalproduct:"${encodeURIComponent(mapping.generic)}"&limit=10`
-        const eventResponse = await fetchWithRetry(eventUrl)
-        const eventData = await eventResponse.json()
+      const eventUrl = `${API_BASE_URL}/event.json?search=patient.drug.medicinalproduct:"${encodeURIComponent(mapping.generic)}"&limit=10`
+      const eventResponse = await fetchWithRetry(eventUrl)
 
-        if (eventData.results) {
-          const adverseEvents = [
-            ...new Set(
-              eventData.results
-                .slice(0, 10)
-                .flatMap((result: any) => result.patient?.reaction?.map((r: any) => r.reactionmeddrapt) || []),
-            ),
-          ].filter(Boolean)
+      if (eventResponse && eventResponse.ok) {
+        try {
+          const eventData = await eventResponse.json()
 
-          if (adverseEvents.length > 0) {
-            fallbackDrugInfo.adverseEvents = adverseEvents.slice(0, 10)
+          if (eventData.results) {
+            const adverseEvents = [
+              ...new Set(
+                eventData.results
+                  .slice(0, 10)
+                  .flatMap((result: any) => result.patient?.reaction?.map((r: any) => r.reactionmeddrapt) || []),
+              ),
+            ].filter(Boolean)
+
+            if (adverseEvents.length > 0) {
+              fallbackInfo.adverseEvents = adverseEvents.slice(0, 10)
+            }
           }
+        } catch (jsonError) {
+          console.warn(`JSON parse error for adverse events:`, jsonError)
         }
-      } catch (eventError) {
-        console.warn("Could not fetch adverse events:", eventError)
       }
     }
 
-    console.warn(`All searches failed for ${drugName}, returning fallback information`)
-    return NextResponse.json(fallbackDrugInfo)
+    console.log(`ℹ️ Using fallback data for: ${drugName}`)
+    return NextResponse.json(fallbackInfo)
   } catch (error) {
-    console.error("Error fetching drug information:", error)
-    return NextResponse.json(fallbackDrugInfo)
+    // Catch any unexpected errors and return fallback
+    console.warn(`⚠️ Unexpected error, using fallback:`, error)
+    return NextResponse.json(fallbackInfo)
   }
 }
 

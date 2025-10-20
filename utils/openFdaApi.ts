@@ -303,69 +303,65 @@ export async function fetchDrugInfo(drugName: string): Promise<DrugInfo> {
       return enhancedInfo
     }
 
-    if (!response.ok) {
-      console.warn(`API response not ok: ${response.status}`)
-      cache[cacheKey] = { data: enhancedInfo, timestamp: Date.now() }
-      return enhancedInfo
-    }
-
+    // Always try to parse the response, even if not ok
     const text = await response.text()
 
-    // Try to parse JSON, if it fails, return fallback
+    let apiDrugInfo
     try {
-      const apiDrugInfo = JSON.parse(text)
-
-      // Validate that we got a proper drug info object
-      if (apiDrugInfo && typeof apiDrugInfo === "object" && apiDrugInfo.drugName) {
-        // Merge API data with enhanced fallback, preferring enhanced data for key fields
-        const mergedInfo: DrugInfo = {
-          drugName: drugName,
-          genericName:
-            enhancedInfo.genericName !== "Generic name not available"
-              ? enhancedInfo.genericName
-              : apiDrugInfo.genericName || enhancedInfo.genericName,
-          brandName: apiDrugInfo.brandName || enhancedInfo.brandName,
-          adverseEvents:
-            enhancedInfo.adverseEvents.length > 1
-              ? enhancedInfo.adverseEvents
-              : apiDrugInfo.adverseEvents || enhancedInfo.adverseEvents,
-          indications:
-            enhancedInfo.indications !==
-            "Please consult prescribing information or medical references for detailed indications."
-              ? enhancedInfo.indications
-              : apiDrugInfo.indications || enhancedInfo.indications,
-          warnings:
-            enhancedInfo.warnings !== "Please consult prescribing information for complete warnings and precautions."
-              ? enhancedInfo.warnings
-              : apiDrugInfo.warnings || enhancedInfo.warnings,
-          precautions:
-            enhancedInfo.precautions !== "Please consult prescribing information for complete precautions."
-              ? enhancedInfo.precautions
-              : apiDrugInfo.precautions || enhancedInfo.precautions,
-          dosageAdministration: apiDrugInfo.dosageAdministration || enhancedInfo.dosageAdministration,
-          interactions: apiDrugInfo.interactions || enhancedInfo.interactions,
-          contraindications: apiDrugInfo.contraindications || enhancedInfo.contraindications,
-          pediatricUse:
-            enhancedInfo.pediatricUse !== "Please consult prescribing information for pediatric use information."
-              ? enhancedInfo.pediatricUse
-              : apiDrugInfo.pediatricUse || enhancedInfo.pediatricUse,
-        }
-
-        // Cache the result
-        cache[cacheKey] = { data: mergedInfo, timestamp: Date.now() }
-        return mergedInfo
-      } else {
-        console.warn("Invalid drug info structure received")
-        cache[cacheKey] = { data: enhancedInfo, timestamp: Date.now() }
-        return enhancedInfo
-      }
+      apiDrugInfo = JSON.parse(text)
     } catch (parseError) {
       console.warn("Failed to parse JSON response:", parseError)
       cache[cacheKey] = { data: enhancedInfo, timestamp: Date.now() }
       return enhancedInfo
     }
+
+    // Validate that we got a proper drug info object
+    if (apiDrugInfo && typeof apiDrugInfo === "object" && apiDrugInfo.drugName) {
+      // Merge API data with enhanced fallback, preferring enhanced data for key fields
+      const mergedInfo: DrugInfo = {
+        drugName: drugName,
+        genericName:
+          enhancedInfo.genericName !== "Generic name not available"
+            ? enhancedInfo.genericName
+            : apiDrugInfo.genericName || enhancedInfo.genericName,
+        brandName: apiDrugInfo.brandName || enhancedInfo.brandName,
+        adverseEvents:
+          enhancedInfo.adverseEvents.length > 1 &&
+          !enhancedInfo.adverseEvents.includes("Consult prescribing information for complete adverse event profile")
+            ? enhancedInfo.adverseEvents
+            : apiDrugInfo.adverseEvents || enhancedInfo.adverseEvents,
+        indications:
+          enhancedInfo.indications !==
+          "Please consult prescribing information or medical references for detailed indications."
+            ? enhancedInfo.indications
+            : apiDrugInfo.indications || enhancedInfo.indications,
+        warnings:
+          enhancedInfo.warnings !== "Please consult prescribing information for complete warnings and precautions."
+            ? enhancedInfo.warnings
+            : apiDrugInfo.warnings || enhancedInfo.warnings,
+        precautions:
+          enhancedInfo.precautions !== "Please consult prescribing information for complete precautions."
+            ? enhancedInfo.precautions
+            : apiDrugInfo.precautions || enhancedInfo.precautions,
+        dosageAdministration: apiDrugInfo.dosageAdministration || enhancedInfo.dosageAdministration,
+        interactions: apiDrugInfo.interactions || enhancedInfo.interactions,
+        contraindications: apiDrugInfo.contraindications || enhancedInfo.contraindications,
+        pediatricUse:
+          enhancedInfo.pediatricUse !== "Please consult prescribing information for pediatric use information."
+            ? enhancedInfo.pediatricUse
+            : apiDrugInfo.pediatricUse || enhancedInfo.pediatricUse,
+      }
+
+      // Cache the result
+      cache[cacheKey] = { data: mergedInfo, timestamp: Date.now() }
+      return mergedInfo
+    } else {
+      console.warn("Invalid drug info structure received, using fallback")
+      cache[cacheKey] = { data: enhancedInfo, timestamp: Date.now() }
+      return enhancedInfo
+    }
   } catch (error) {
-    console.error("Error fetching drug information:", error)
+    console.warn("Error fetching drug information, using enhanced fallback:", error)
     cache[cacheKey] = { data: enhancedInfo, timestamp: Date.now() }
     return enhancedInfo
   }

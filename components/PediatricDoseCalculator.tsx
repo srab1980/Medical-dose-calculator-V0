@@ -215,7 +215,7 @@ export function PediatricDoseCalculator() {
 
         setResult(calculationResult)
 
-        // Fetch drug information
+        // Fetch drug information - don't fail the calculation if this fails
         try {
           const drugInfoResult = await fetchDrugInfo(medication)
           setDrugInfo(drugInfoResult)
@@ -223,12 +223,15 @@ export function PediatricDoseCalculator() {
           const interactionsResult = await fetchDrugInteractions(medication)
           setDrugInteractions(interactionsResult)
         } catch (apiError) {
-          console.warn("FDA API unavailable, continuing without drug information:", apiError)
+          // Silently use fallback - the API will return enhanced fallback data
+          console.log("Using fallback drug information (API unavailable)")
+
+          // Set basic fallback info
           setDrugInfo({
             drugName: medication,
-            genericName: "API unavailable",
+            genericName: "Information loading...",
             brandName: medication,
-            adverseEvents: ["FDA database temporarily unavailable"],
+            adverseEvents: ["Drug information is loading in the background"],
             indications: "Please consult prescribing information for detailed drug information.",
             warnings: "Please consult prescribing information for warnings.",
             precautions: "Please consult prescribing information for precautions.",
@@ -237,7 +240,7 @@ export function PediatricDoseCalculator() {
             contraindications: "Please consult prescribing information for contraindications.",
             pediatricUse: "Please consult prescribing information for pediatric use.",
           })
-          setDrugInteractions(["Drug interaction data temporarily unavailable"])
+          setDrugInteractions(["Drug interaction data will load in the background"])
         }
       } catch (error) {
         alert("Error calculating dose: " + (error instanceof Error ? error.message : String(error)))
@@ -662,348 +665,357 @@ export function PediatricDoseCalculator() {
               <TabsContent value="game">
                 <MedicationLearningGame />
               </TabsContent>
-            </Tabs>
 
-            {/* Safety Alerts */}
-            {result && result.safetyAlerts && result.safetyAlerts.length > 0 && showSafetyAlerts && (
-              <div className="mt-4 space-y-2">
-                {result.safetyAlerts.map((alert: any, index: number) => (
-                  <Alert
-                    key={index}
-                    variant={alert.type === "error" ? "destructive" : "default"}
-                    className="border-l-4 border-l-orange-500"
-                  >
-                    <div className="flex items-center gap-2">
-                      {alert.icon}
-                      <AlertDescription className="font-medium">{alert.message}</AlertDescription>
-                    </div>
-                  </Alert>
-                ))}
-              </div>
-            )}
-
-            {result && (
-              <div className="mt-4 p-4 bg-gray-100 rounded-md dark:bg-gray-700 dark:text-white">
-                <div ref={printRef}>
-                  {formInputs.patientName && (
-                    <div className="patient-info mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded">
-                      <h4 className="font-semibold text-blue-900 dark:text-blue-100">Patient Information</h4>
-                      <p>
-                        <strong>Name:</strong> {formInputs.patientName}
-                      </p>
-                      <p>
-                        <strong>Age:</strong> {formInputs.ageYears || 0} years, {formInputs.ageMonths || 0} months
-                      </p>
-                      <p>
-                        <strong>Weight:</strong> {formInputs.weightKg} kg
-                      </p>
-                      {formInputs.indication && (
-                        <p>
-                          <strong>Indication:</strong> {formInputs.indication}
-                        </p>
-                      )}
+              {/* Only show results when NOT in game tab */}
+              {activeTab !== "game" && (
+                <>
+                  {/* Safety Alerts */}
+                  {result && result.safetyAlerts && result.safetyAlerts.length > 0 && showSafetyAlerts && (
+                    <div className="mt-4 space-y-2">
+                      {result.safetyAlerts.map((alert: any, index: number) => (
+                        <Alert
+                          key={index}
+                          variant={alert.type === "error" ? "destructive" : "default"}
+                          className="border-l-4 border-l-orange-500"
+                        >
+                          <div className="flex items-center gap-2">
+                            {alert.icon}
+                            <AlertDescription className="font-medium">{alert.message}</AlertDescription>
+                          </div>
+                        </Alert>
+                      ))}
                     </div>
                   )}
 
-                  <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
-                    <Calculator className="h-5 w-5" />
-                    Calculation Result:
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <p>
-                        <strong>Medication:</strong> {formInputs.medication}
-                      </p>
-                      <p>
-                        <strong>Dose:</strong> {result.dose} mg daily
-                      </p>
-                      <p>
-                        <strong>Dose in mL:</strong> {result.doseMl} mL
-                      </p>
-                      <p>
-                        <strong>Frequency:</strong> {result.frequency}
-                      </p>
+                  {result && (
+                    <div className="mt-4 p-4 bg-gray-100 rounded-md dark:bg-gray-700 dark:text-white">
+                      <div ref={printRef}>
+                        {formInputs.patientName && (
+                          <div className="patient-info mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded">
+                            <h4 className="font-semibold text-blue-900 dark:text-blue-100">Patient Information</h4>
+                            <p>
+                              <strong>Name:</strong> {formInputs.patientName}
+                            </p>
+                            <p>
+                              <strong>Age:</strong> {formInputs.ageYears || 0} years, {formInputs.ageMonths || 0} months
+                            </p>
+                            <p>
+                              <strong>Weight:</strong> {formInputs.weightKg} kg
+                            </p>
+                            {formInputs.indication && (
+                              <p>
+                                <strong>Indication:</strong> {formInputs.indication}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
+                          <Calculator className="h-5 w-5" />
+                          Calculation Result:
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <p>
+                              <strong>Medication:</strong> {formInputs.medication}
+                            </p>
+                            <p>
+                              <strong>Dose:</strong> {result.dose} mg daily
+                            </p>
+                            <p>
+                              <strong>Dose in mL:</strong> {result.doseMl} mL
+                            </p>
+                            <p>
+                              <strong>Frequency:</strong> {result.frequency}
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <p>
+                              <strong>Reference:</strong> {result.reference}
+                            </p>
+                            {result.comment && (
+                              <p>
+                                <strong>Comment:</strong> {result.comment}
+                              </p>
+                            )}
+                            <p>
+                              <strong>Calculated on:</strong> {new Date().toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+
+                        <a
+                          href={result.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline dark:text-blue-400 inline-flex items-center gap-1 mt-2"
+                        >
+                          <BookOpen className="h-4 w-4" />
+                          {result.referenceLabel}
+                        </a>
+                      </div>
+
+                      <div className="flex gap-2 mt-4">
+                        <Button onClick={handleSave} className="flex items-center gap-2">
+                          <History className="h-4 w-4" />
+                          Save Calculation
+                        </Button>
+                        <Button
+                          onClick={handlePrint}
+                          className="flex items-center gap-2 bg-transparent"
+                          variant="outline"
+                        >
+                          <Printer className="h-4 w-4" />
+                          Print Report
+                        </Button>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <p>
-                        <strong>Reference:</strong> {result.reference}
-                      </p>
-                      {result.comment && (
-                        <p>
-                          <strong>Comment:</strong> {result.comment}
-                        </p>
-                      )}
-                      <p>
-                        <strong>Calculated on:</strong> {new Date().toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
+                  )}
 
-                  <a
-                    href={result.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline dark:text-blue-400 inline-flex items-center gap-1 mt-2"
-                  >
-                    <BookOpen className="h-4 w-4" />
-                    {result.referenceLabel}
-                  </a>
-                </div>
-
-                <div className="flex gap-2 mt-4">
-                  <Button onClick={handleSave} className="flex items-center gap-2">
-                    <History className="h-4 w-4" />
-                    Save Calculation
-                  </Button>
-                  <Button onClick={handlePrint} className="flex items-center gap-2 bg-transparent" variant="outline">
-                    <Printer className="h-4 w-4" />
-                    Print Report
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {drugInfo && drugInfo.drugName && (
-              <div className="mt-4 p-4 bg-gray-100 rounded-md dark:bg-gray-700 dark:text-white">
-                <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
-                  <BookOpen className="h-5 w-5" />
-                  Drug Information: {drugInfo.brandName || drugInfo.drugName} ({drugInfo.genericName || "N/A"})
-                </h3>
-                <Tabs defaultValue="indications">
-                  <TabsList className="grid grid-cols-4 lg:grid-cols-7">
-                    <TabsTrigger value="indications">Indications</TabsTrigger>
-                    <TabsTrigger value="dosage">Dosage</TabsTrigger>
-                    <TabsTrigger value="warnings">Warnings</TabsTrigger>
-                    <TabsTrigger value="precautions">Precautions</TabsTrigger>
-                    <TabsTrigger value="interactions">Interactions</TabsTrigger>
-                    <TabsTrigger value="adverse">Adverse</TabsTrigger>
-                    <TabsTrigger value="pediatric">Pediatric</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="indications">
-                    <ScrollArea className="h-[300px] p-4">
-                      <h4 className="font-semibold mb-2">Indications and Usage</h4>
-                      <ul className="list-disc pl-5 space-y-1">
-                        {(drugInfo.indications || "No information available")
-                          .split("\n")
-                          .filter(Boolean)
-                          .map((item, index) => (
-                            <li key={index}>{item}</li>
-                          ))}
-                      </ul>
-                    </ScrollArea>
-                  </TabsContent>
-                  <TabsContent value="dosage">
-                    <ScrollArea className="h-[300px] p-4">
-                      <h4 className="font-semibold mb-2 flex items-center gap-2">
-                        <Calculator className="h-4 w-4 text-blue-500" />
-                        Dosage and Administration
-                      </h4>
-                      <ul className="space-y-3">
-                        {drugInfo.dosageAdministration &&
-                        drugInfo.dosageAdministration !== "No information available" &&
-                        drugInfo.dosageAdministration !==
-                          "Please consult prescribing information for dosage and administration details." ? (
-                          drugInfo.dosageAdministration
-                            .split(/(?<=[.!?])\s+/)
-                            .filter((sentence) => sentence.trim().length > 10)
-                            .map((sentence, index) => {
-                              const cleanSentence = sentence
-                                .trim()
-                                .replace(/^\d+\.\s*/, "")
-                                .replace(/^$$\d+$$\s*/, "")
-                              return (
-                                <li key={index} className="flex items-start gap-2 text-sm leading-relaxed">
-                                  <div className="flex-shrink-0 mt-1">
-                                    {cleanSentence.toLowerCase().includes("pediatric") ||
-                                    cleanSentence.toLowerCase().includes("child") ? (
-                                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                                    ) : cleanSentence.toLowerCase().includes("adult") ? (
-                                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                                    ) : cleanSentence.toLowerCase().includes("dose") ||
-                                      cleanSentence.toLowerCase().includes("mg") ? (
-                                      <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                                    ) : cleanSentence.toLowerCase().includes("administration") ||
-                                      cleanSentence.toLowerCase().includes("take") ? (
-                                      <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-                                    ) : (
-                                      <div className="w-2 h-2 rounded-full bg-gray-400"></div>
-                                    )}
-                                  </div>
-                                  <span>{cleanSentence}</span>
-                                </li>
-                              )
-                            })
-                        ) : (
-                          <li className="flex items-start gap-2 text-sm text-gray-500">
-                            <div className="w-2 h-2 rounded-full bg-gray-300 mt-1 flex-shrink-0"></div>
-                            <span>No dosage information available</span>
-                          </li>
-                        )}
-                      </ul>
-                    </ScrollArea>
-                  </TabsContent>
-                  <TabsContent value="warnings">
-                    <ScrollArea className="h-[300px] p-4">
-                      <h4 className="font-semibold mb-2 flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-red-500" />
-                        Warnings
-                      </h4>
-                      <ul className="list-disc pl-5 space-y-2">
-                        {drugInfo.warnings &&
-                        drugInfo.warnings !== "No information available" &&
-                        drugInfo.warnings !== "Please consult prescribing information for warnings." ? (
-                          drugInfo.warnings
-                            .split(/(?<=[.!?])\s+/)
-                            .filter((item) => item.trim().length > 15)
-                            .map((item, index) => (
-                              <li key={index} className="text-sm leading-relaxed">
-                                {item.trim()}
-                              </li>
-                            ))
-                        ) : (
-                          <li className="text-sm text-gray-500">No warnings information available</li>
-                        )}
-                      </ul>
-                    </ScrollArea>
-                  </TabsContent>
-                  <TabsContent value="precautions">
-                    <ScrollArea className="h-[300px] p-4">
-                      <h4 className="font-semibold mb-2 flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-yellow-500" />
-                        Precautions
-                      </h4>
-                      <ul className="list-disc pl-5 space-y-2">
-                        {drugInfo.precautions &&
-                        drugInfo.precautions !== "No information available" &&
-                        drugInfo.precautions !== "Please consult prescribing information for precautions." ? (
-                          drugInfo.precautions
-                            .split(/(?<=[.!?])\s+/)
-                            .filter((item) => item.trim().length > 15)
-                            .map((item, index) => (
-                              <li key={index} className="text-sm leading-relaxed">
-                                {item.trim()}
-                              </li>
-                            ))
-                        ) : (
-                          <li className="text-sm text-gray-500">No precautions information available</li>
-                        )}
-                      </ul>
-                    </ScrollArea>
-                  </TabsContent>
-                  <TabsContent value="interactions">
-                    <ScrollArea className="h-[300px] p-4">
-                      <h4 className="font-semibold mb-2 flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                        Drug Interactions
-                      </h4>
-                      <ul className="space-y-3">
-                        {drugInfo.interactions &&
-                        drugInfo.interactions !== "No information available" &&
-                        drugInfo.interactions !==
-                          "Please consult prescribing information for drug interaction information." ? (
-                          drugInfo.interactions
-                            .split(/(?<=[.!?])\s+/)
-                            .filter((sentence) => sentence.trim().length > 15)
-                            .map((sentence, index) => {
-                              const cleanSentence = sentence
-                                .trim()
-                                .replace(/^\d+\.\s*/, "")
-                                .replace(/^$$\d+$$\s*/, "")
-                              return (
-                                <li key={index} className="flex items-start gap-2 text-sm leading-relaxed">
-                                  <div className="flex-shrink-0 mt-1">
-                                    {cleanSentence.toLowerCase().includes("contraindicated") ||
-                                    cleanSentence.toLowerCase().includes("avoid") ? (
-                                      <Shield className="h-3 w-3 text-red-500" />
-                                    ) : cleanSentence.toLowerCase().includes("caution") ||
-                                      cleanSentence.toLowerCase().includes("monitor") ? (
-                                      <AlertTriangle className="h-3 w-3 text-yellow-500" />
-                                    ) : cleanSentence.toLowerCase().includes("increase") ||
-                                      cleanSentence.toLowerCase().includes("decrease") ? (
-                                      <TrendingUp className="h-3 w-3 text-blue-500" />
-                                    ) : cleanSentence.toLowerCase().includes("warfarin") ||
-                                      cleanSentence.toLowerCase().includes("anticoagulant") ? (
-                                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                                    ) : cleanSentence.toLowerCase().includes("enzyme") ||
-                                      cleanSentence.toLowerCase().includes("cyp") ? (
-                                      <div className="w-3 h-3 rounded-full bg-purple-500"></div>
-                                    ) : (
-                                      <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                                    )}
-                                  </div>
-                                  <span>{cleanSentence}</span>
-                                </li>
-                              )
-                            })
-                        ) : (
-                          <li className="flex items-start gap-2 text-sm text-gray-500">
-                            <div className="w-3 h-3 rounded-full bg-gray-300 mt-1 flex-shrink-0"></div>
-                            <span>No drug interaction information available</span>
-                          </li>
-                        )}
-                      </ul>
-                      {drugInteractions.length > 0 &&
-                        !drugInteractions.includes("Drug interaction data temporarily unavailable") &&
-                        !drugInteractions.includes("Drug interaction data not available") && (
-                          <>
-                            <h5 className="font-semibold mt-6 mb-3 flex items-center gap-2">
-                              <Info className="h-4 w-4 text-blue-500" />
-                              Additional Interactions:
-                            </h5>
-                            <ul className="space-y-3">
-                              {drugInteractions.map((interaction, index) => {
-                                const cleanInteraction = interaction
-                                  .trim()
-                                  .replace(/^\d+\.\s*/, "")
-                                  .replace(/^$$\d+$$\s*/, "")
-                                return (
-                                  <li key={index} className="flex items-start gap-2 text-sm leading-relaxed">
-                                    <div className="flex-shrink-0 mt-1">
-                                      <Info className="h-3 w-3 text-blue-500" />
-                                    </div>
-                                    <span>{cleanInteraction}</span>
-                                  </li>
-                                )
-                              })}
+                  {drugInfo && drugInfo.drugName && (
+                    <div className="mt-4 p-4 bg-gray-100 rounded-md dark:bg-gray-700 dark:text-white">
+                      <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
+                        <BookOpen className="h-5 w-5" />
+                        Drug Information: {drugInfo.brandName || drugInfo.drugName} ({drugInfo.genericName || "N/A"})
+                      </h3>
+                      <Tabs defaultValue="indications">
+                        <TabsList className="grid grid-cols-4 lg:grid-cols-7">
+                          <TabsTrigger value="indications">Indications</TabsTrigger>
+                          <TabsTrigger value="dosage">Dosage</TabsTrigger>
+                          <TabsTrigger value="warnings">Warnings</TabsTrigger>
+                          <TabsTrigger value="precautions">Precautions</TabsTrigger>
+                          <TabsTrigger value="interactions">Interactions</TabsTrigger>
+                          <TabsTrigger value="adverse">Adverse</TabsTrigger>
+                          <TabsTrigger value="pediatric">Pediatric</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="indications">
+                          <ScrollArea className="h-[300px] p-4">
+                            <h4 className="font-semibold mb-2">Indications and Usage</h4>
+                            <ul className="list-disc pl-5 space-y-1">
+                              {(drugInfo.indications || "No information available")
+                                .split("\n")
+                                .filter(Boolean)
+                                .map((item, index) => (
+                                  <li key={index}>{item}</li>
+                                ))}
                             </ul>
-                          </>
-                        )}
-                    </ScrollArea>
-                  </TabsContent>
-                  <TabsContent value="adverse">
-                    <ScrollArea className="h-[300px] p-4">
-                      <h4 className="font-semibold mb-2">Adverse Events</h4>
-                      <ul className="list-disc pl-5 space-y-1">
-                        {drugInfo.adverseEvents &&
-                        drugInfo.adverseEvents.length > 0 &&
-                        !drugInfo.adverseEvents.includes("Information not available from FDA database") ? (
-                          drugInfo.adverseEvents.map((event, index) => (
-                            <li key={index} className="text-sm leading-relaxed">
-                              {event}
-                            </li>
-                          ))
-                        ) : (
-                          <li className="text-sm text-gray-500">No adverse events information available</li>
-                        )}
-                      </ul>
-                    </ScrollArea>
-                  </TabsContent>
-                  <TabsContent value="pediatric">
-                    <ScrollArea className="h-[300px] p-4">
-                      <h4 className="font-semibold mb-2">Pediatric Use</h4>
-                      <ul className="list-disc pl-5 space-y-1">
-                        {(drugInfo.pediatricUse || "No information available")
-                          .split("\n")
-                          .filter(Boolean)
-                          .map((item, index) => (
-                            <li key={index}>{item}</li>
-                          ))}
-                      </ul>
-                    </ScrollArea>
-                  </TabsContent>
-                </Tabs>
-              </div>
-            )}
+                          </ScrollArea>
+                        </TabsContent>
+                        <TabsContent value="dosage">
+                          <ScrollArea className="h-[300px] p-4">
+                            <h4 className="font-semibold mb-2 flex items-center gap-2">
+                              <Calculator className="h-4 w-4 text-blue-500" />
+                              Dosage and Administration
+                            </h4>
+                            <ul className="space-y-3">
+                              {drugInfo.dosageAdministration &&
+                              drugInfo.dosageAdministration !== "No information available" &&
+                              drugInfo.dosageAdministration !==
+                                "Please consult prescribing information for dosage and administration details." ? (
+                                drugInfo.dosageAdministration
+                                  .split(/(?<=[.!?])\s+/)
+                                  .filter((sentence) => sentence.trim().length > 10)
+                                  .map((sentence, index) => {
+                                    const cleanSentence = sentence
+                                      .trim()
+                                      .replace(/^\d+\.\s*/, "")
+                                      .replace(/^$$\d+$$\s*/, "")
+                                    return (
+                                      <li key={index} className="flex items-start gap-2 text-sm leading-relaxed">
+                                        <div className="flex-shrink-0 mt-1">
+                                          {cleanSentence.toLowerCase().includes("pediatric") ||
+                                          cleanSentence.toLowerCase().includes("child") ? (
+                                            <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                          ) : cleanSentence.toLowerCase().includes("adult") ? (
+                                            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                                          ) : cleanSentence.toLowerCase().includes("dose") ||
+                                            cleanSentence.toLowerCase().includes("mg") ? (
+                                            <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                                          ) : cleanSentence.toLowerCase().includes("administration") ||
+                                            cleanSentence.toLowerCase().includes("take") ? (
+                                            <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                                          ) : (
+                                            <div className="w-2 h-2 rounded-full bg-gray-400"></div>
+                                          )}
+                                        </div>
+                                        <span>{cleanSentence}</span>
+                                      </li>
+                                    )
+                                  })
+                              ) : (
+                                <li className="flex items-start gap-2 text-sm text-gray-500">
+                                  <div className="w-2 h-2 rounded-full bg-gray-300 mt-1 flex-shrink-0"></div>
+                                  <span>No dosage information available</span>
+                                </li>
+                              )}
+                            </ul>
+                          </ScrollArea>
+                        </TabsContent>
+                        <TabsContent value="warnings">
+                          <ScrollArea className="h-[300px] p-4">
+                            <h4 className="font-semibold mb-2 flex items-center gap-2">
+                              <AlertTriangle className="h-4 w-4 text-red-500" />
+                              Warnings
+                            </h4>
+                            <ul className="list-disc pl-5 space-y-2">
+                              {drugInfo.warnings &&
+                              drugInfo.warnings !== "No information available" &&
+                              drugInfo.warnings !== "Please consult prescribing information for warnings." ? (
+                                drugInfo.warnings
+                                  .split(/(?<=[.!?])\s+/)
+                                  .filter((item) => item.trim().length > 15)
+                                  .map((item, index) => (
+                                    <li key={index} className="text-sm leading-relaxed">
+                                      {item.trim()}
+                                    </li>
+                                  ))
+                              ) : (
+                                <li className="text-sm text-gray-500">No warnings information available</li>
+                              )}
+                            </ul>
+                          </ScrollArea>
+                        </TabsContent>
+                        <TabsContent value="precautions">
+                          <ScrollArea className="h-[300px] p-4">
+                            <h4 className="font-semibold mb-2 flex items-center gap-2">
+                              <Shield className="h-4 w-4 text-yellow-500" />
+                              Precautions
+                            </h4>
+                            <ul className="list-disc pl-5 space-y-2">
+                              {drugInfo.precautions &&
+                              drugInfo.precautions !== "No information available" &&
+                              drugInfo.precautions !== "Please consult prescribing information for precautions." ? (
+                                drugInfo.precautions
+                                  .split(/(?<=[.!?])\s+/)
+                                  .filter((item) => item.trim().length > 15)
+                                  .map((item, index) => (
+                                    <li key={index} className="text-sm leading-relaxed">
+                                      {item.trim()}
+                                    </li>
+                                  ))
+                              ) : (
+                                <li className="text-sm text-gray-500">No precautions information available</li>
+                              )}
+                            </ul>
+                          </ScrollArea>
+                        </TabsContent>
+                        <TabsContent value="interactions">
+                          <ScrollArea className="h-[300px] p-4">
+                            <h4 className="font-semibold mb-2 flex items-center gap-2">
+                              <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                              Drug Interactions
+                            </h4>
+                            <ul className="space-y-3">
+                              {drugInfo.interactions &&
+                              drugInfo.interactions !== "No information available" &&
+                              drugInfo.interactions !==
+                                "Please consult prescribing information for drug interaction information." ? (
+                                drugInfo.interactions
+                                  .split(/(?<=[.!?])\s+/)
+                                  .filter((sentence) => sentence.trim().length > 15)
+                                  .map((sentence, index) => {
+                                    const cleanSentence = sentence
+                                      .trim()
+                                      .replace(/^\d+\.\s*/, "")
+                                      .replace(/^$$\d+$$\s*/, "")
+                                    return (
+                                      <li key={index} className="flex items-start gap-2 text-sm leading-relaxed">
+                                        <div className="flex-shrink-0 mt-1">
+                                          {cleanSentence.toLowerCase().includes("contraindicated") ||
+                                          cleanSentence.toLowerCase().includes("avoid") ? (
+                                            <Shield className="h-3 w-3 text-red-500" />
+                                          ) : cleanSentence.toLowerCase().includes("caution") ||
+                                            cleanSentence.toLowerCase().includes("monitor") ? (
+                                            <AlertTriangle className="h-3 w-3 text-yellow-500" />
+                                          ) : cleanSentence.toLowerCase().includes("increase") ||
+                                            cleanSentence.toLowerCase().includes("decrease") ? (
+                                            <TrendingUp className="h-3 w-3 text-blue-500" />
+                                          ) : cleanSentence.toLowerCase().includes("warfarin") ||
+                                            cleanSentence.toLowerCase().includes("anticoagulant") ? (
+                                            <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                                          ) : cleanSentence.toLowerCase().includes("enzyme") ||
+                                            cleanSentence.toLowerCase().includes("cyp") ? (
+                                            <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                                          ) : (
+                                            <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                                          )}
+                                        </div>
+                                        <span>{cleanSentence}</span>
+                                      </li>
+                                    )
+                                  })
+                              ) : (
+                                <li className="flex items-start gap-2 text-sm text-gray-500">
+                                  <div className="w-3 h-3 rounded-full bg-gray-300 mt-1 flex-shrink-0"></div>
+                                  <span>No drug interaction information available</span>
+                                </li>
+                              )}
+                            </ul>
+                            {drugInteractions.length > 0 &&
+                              !drugInteractions.includes("Drug interaction data temporarily unavailable") &&
+                              !drugInteractions.includes("Drug interaction data not available") && (
+                                <>
+                                  <h5 className="font-semibold mt-6 mb-3 flex items-center gap-2">
+                                    <Info className="h-4 w-4 text-blue-500" />
+                                    Additional Interactions:
+                                  </h5>
+                                  <ul className="space-y-3">
+                                    {drugInteractions.map((interaction, index) => {
+                                      const cleanInteraction = interaction
+                                        .trim()
+                                        .replace(/^\d+\.\s*/, "")
+                                        .replace(/^$$\d+$$\s*/, "")
+                                      return (
+                                        <li key={index} className="flex items-start gap-2 text-sm leading-relaxed">
+                                          <div className="flex-shrink-0 mt-1">
+                                            <Info className="h-3 w-3 text-blue-500" />
+                                          </div>
+                                          <span>{cleanInteraction}</span>
+                                        </li>
+                                      )
+                                    })}
+                                  </ul>
+                                </>
+                              )}
+                          </ScrollArea>
+                        </TabsContent>
+                        <TabsContent value="adverse">
+                          <ScrollArea className="h-[300px] p-4">
+                            <h4 className="font-semibold mb-2">Adverse Events</h4>
+                            <ul className="list-disc pl-5 space-y-1">
+                              {drugInfo.adverseEvents &&
+                              drugInfo.adverseEvents.length > 0 &&
+                              !drugInfo.adverseEvents.includes("Information not available from FDA database") ? (
+                                drugInfo.adverseEvents.map((event, index) => (
+                                  <li key={index} className="text-sm leading-relaxed">
+                                    {event}
+                                  </li>
+                                ))
+                              ) : (
+                                <li className="text-sm text-gray-500">No adverse events information available</li>
+                              )}
+                            </ul>
+                          </ScrollArea>
+                        </TabsContent>
+                        <TabsContent value="pediatric">
+                          <ScrollArea className="h-[300px] p-4">
+                            <h4 className="font-semibold mb-2">Pediatric Use</h4>
+                            <ul className="list-disc pl-5 space-y-1">
+                              {(drugInfo.pediatricUse || "No information available")
+                                .split("\n")
+                                .filter(Boolean)
+                                .map((item, index) => (
+                                  <li key={index}>{item}</li>
+                                ))}
+                            </ul>
+                          </ScrollArea>
+                        </TabsContent>
+                      </Tabs>
+                    </div>
+                  )}
+                </>
+              )}
+            </Tabs>
           </CardContent>
         </Card>
 

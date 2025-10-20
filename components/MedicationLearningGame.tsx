@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -33,7 +33,9 @@ import {
   ArrowLeft,
   ArrowRight,
   Sparkles,
+  Info,
 } from "lucide-react"
+import { Input } from "@/components/ui/input"
 import { medicationData } from "@/data/medicationData"
 
 // Create a single AudioContext instance
@@ -361,6 +363,72 @@ const getMedicationColor = (medicationName: string, category: string, isCorrect?
   return category === "antibiotics" ? "text-orange-500" : "text-gray-500"
 }
 
+const getMedicationType = (medicationName: string, category: string): string => {
+  const name = medicationName.toLowerCase()
+
+  if (name.includes("nystatin") || name.includes("mycostatin")) {
+    return "Antifungal"
+  }
+
+  if (
+    name.includes("augmentin") ||
+    name.includes("zinnat") ||
+    name.includes("klacid") ||
+    name.includes("clarithromycin") ||
+    name.includes("zithromax") ||
+    name.includes("azithromycin") ||
+    name.includes("suprax") ||
+    name.includes("cefixime") ||
+    name.includes("amoxicillin") ||
+    name.includes("metronidazole") ||
+    name.includes("septrin") ||
+    name.includes("cefuroxime") ||
+    name.includes("nitrofurantoin") ||
+    name.includes("trimethoprim") ||
+    name.includes("sulfamethoxazole") ||
+    category === "antibiotics"
+  ) {
+    return "Antibiotic"
+  }
+
+  if (
+    name.includes("panadol") ||
+    name.includes("adol") ||
+    name.includes("acetaminophen") ||
+    name.includes("paracetamol") ||
+    name.includes("brufen") ||
+    name.includes("ibuprofen")
+  ) {
+    return "Analgesic"
+  }
+
+  if (
+    name.includes("aerius") ||
+    name.includes("zyrtec") ||
+    name.includes("desloratadine") ||
+    name.includes("cetirizine")
+  ) {
+    return "Antihistamine"
+  }
+
+  if (
+    name.includes("depakine") ||
+    name.includes("tegretol") ||
+    name.includes("trileptal") ||
+    name.includes("valproic") ||
+    name.includes("carbamazepine") ||
+    name.includes("oxcarbazepine")
+  ) {
+    return "Anticonvulsant"
+  }
+
+  if (name.includes("zovirax") || name.includes("acyclovir")) {
+    return "Antiviral"
+  }
+
+  return category === "antibiotics" ? "Antibiotic" : "Other Medication"
+}
+
 interface GameStats {
   totalQuestions: number
   correctAnswers: number
@@ -439,7 +507,6 @@ export function MedicationLearningGame() {
   const [showCelebration, setShowCelebration] = useState(false)
   const [recentAchievement, setRecentAchievement] = useState<Achievement | null>(null)
 
-  // Flashcard-specific state
   const [flashcardFilter, setFlashcardFilter] = useState<"all" | "needReview" | "bookmarked">("all")
   const [isShuffled, setIsShuffled] = useState(false)
   const [autoAdvance, setAutoAdvance] = useState(false)
@@ -462,10 +529,13 @@ export function MedicationLearningGame() {
     badges: string[]
   } | null>(null)
 
+  const [isProcessingAnswer, setIsProcessingAnswer] = useState(false)
+  const lastAnswerTime = useRef(0)
+
   useEffect(() => {
     const savedStats = localStorage.getItem("medicationGameStats")
     if (savedStats) {
-      const parsed = JSON.parse(savedStats) // FIXED: Was JSON.JSON.parse
+      const parsed = JSON.parse(savedStats)
       setGameStats({
         ...parsed,
         questionsAsked: parsed.questionsAsked || [],
@@ -491,7 +561,6 @@ export function MedicationLearningGame() {
     return () => clearInterval(interval)
   }, [isTimerActive, timeLeft])
 
-  // Auto-advance effect for flashcards
   useEffect(() => {
     if (autoAdvance && isCardFlipped && gameMode === "flashcards" && !showAnswer) {
       const timer = setTimeout(() => {
@@ -500,43 +569,6 @@ export function MedicationLearningGame() {
       return () => clearTimeout(timer)
     }
   }, [autoAdvance, isCardFlipped, gameMode, showAnswer, autoAdvanceDelay])
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (gameMode === "flashcards" && currentQuestion) {
-        switch (e.key) {
-          case " ":
-          case "Enter":
-            e.preventDefault()
-            if (!isCardFlipped) {
-              setIsCardFlipped(true)
-              if (soundEnabled) playSound("flip")
-            }
-            break
-          case "ArrowRight":
-            e.preventDefault()
-            if (isCardFlipped) {
-              handleAnswer(true)
-            }
-            break
-          case "ArrowLeft":
-            e.preventDefault()
-            if (isCardFlipped) {
-              handleAnswer(false)
-            }
-            break
-          case "b":
-            e.preventDefault()
-            toggleBookmark()
-            break
-        }
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyPress)
-    return () => window.removeEventListener("keydown", handleKeyPress)
-  }, [gameMode, currentQuestion, isCardFlipped, soundEnabled])
 
   const generateQuestions = useCallback(
     (count = 10): Question[] => {
@@ -602,8 +634,16 @@ export function MedicationLearningGame() {
           availableTypes.push(...questionTypes)
         }
 
-        const questionType =
-          gameMode === "flashcards" ? "flashcard" : availableTypes[Math.floor(Math.random() * availableTypes.length)]
+        let questionType =
+          gameMode === "flashcards"
+            ? "flashcard"
+            : availableTypes.filter((t) => t !== "flashcard")[
+                Math.floor(Math.random() * availableTypes.filter((t) => t !== "flashcard").length)
+              ] || "multiple-choice"
+
+        if (questionType === "dosage-calc" && !med.reference.match(/mg\/kg/)) {
+          questionType = "multiple-choice"
+        }
 
         const questionCategory = questionCategories[Math.floor(Math.random() * questionCategories.length)]
 
@@ -683,12 +723,21 @@ export function MedicationLearningGame() {
         },
       },
       {
-        question: `What is the medication category for ${med.name}?`,
-        correctAnswer: med.category === "antibiotics" ? "Antibiotic" : "Other Medication",
+        question: `What is the medication type for ${med.name}?`,
+        correctAnswer: getMedicationType(med.name, med.category),
         category: "form",
         generateOptions: () => {
-          const options = [med.category === "antibiotics" ? "Antibiotic" : "Other Medication"]
-          const otherOptions = ["Antibiotic", "Analgesic", "Antihistamine", "Anticonvulsant", "Antiviral"]
+          const correctType = getMedicationType(med.name, med.category)
+          const options = [correctType]
+          const otherOptions = [
+            "Antibiotic",
+            "Analgesic",
+            "Antihistamine",
+            "Anticonvulsant",
+            "Antiviral",
+            "Antifungal",
+            "Other Medication",
+          ]
           otherOptions.forEach((option) => {
             if (!options.includes(option) && options.length < 4) {
               options.push(option)
@@ -724,7 +773,7 @@ export function MedicationLearningGame() {
       },
       {
         question: `What type of medication is ${med.name}?`,
-        answer: med.category === "antibiotics" ? "Antibiotic" : "Other medication",
+        answer: getMedicationType(med.name, med.category),
         category: "form",
       },
       {
@@ -815,8 +864,24 @@ export function MedicationLearningGame() {
     const weights = [5, 10, 15, 20, 25, 30]
     const weight = weights[Math.floor(Math.random() * weights.length)]
 
-    const doseMatch = med.reference.match(/(\d+)\s*mg\/kg\/day/)
-    const dose = doseMatch ? Number.parseInt(doseMatch[1]) : 10
+    let dose = 10
+    let dosePattern = null
+
+    dosePattern = med.reference.match(/(\d+(?:\.\d+)?)\s*mg\/kg\/day/)
+    if (dosePattern) {
+      dose = Number.parseFloat(dosePattern[1])
+    } else {
+      dosePattern = med.reference.match(/(\d+(?:\.\d+)?)\s*mg\/kg/)
+      if (dosePattern) {
+        dose = Number.parseFloat(dosePattern[1])
+      } else {
+        console.warn(`Cannot create dosage calculation for ${med.name} - no mg/kg pattern found`)
+      }
+    }
+
+    if (dose < 0.1 || dose > 100) {
+      console.warn(`Unusual dose detected for ${med.name}: ${dose} mg/kg/day`)
+    }
 
     const totalDose = dose * weight
     const wrongAnswers = [Math.round(totalDose * 0.5), Math.round(totalDose * 1.5), Math.round(totalDose * 2)]
@@ -910,16 +975,28 @@ export function MedicationLearningGame() {
     },
   ]
 
-  const checkAchievements = (newStats: GameStats) => {
-    achievements.forEach((achievement) => {
-      if (!newStats.achievements.includes(achievement.id) && achievement.condition(newStats)) {
-        newStats.achievements.push(achievement.id)
-        newStats.experience += achievement.reward
-        setRecentAchievement(achievement)
-        setShowCelebration(true)
-        setTimeout(() => setShowCelebration(false), 3000)
+  const checkAchievements = (
+    stats: GameStats,
+  ): {
+    stats: GameStats
+    newAchievement: Achievement | null
+  } => {
+    let updatedStats = { ...stats }
+    let foundAchievement: Achievement | null = null
+
+    for (const achievement of achievements) {
+      if (!updatedStats.achievements.includes(achievement.id) && achievement.condition(updatedStats)) {
+        updatedStats = {
+          ...updatedStats,
+          achievements: [...updatedStats.achievements, achievement.id],
+          experience: updatedStats.experience + achievement.reward,
+        }
+        foundAchievement = achievement
+        break
       }
-    })
+    }
+
+    return { stats: updatedStats, newAchievement: foundAchievement }
   }
 
   const calculateLevel = (experience: number): number => {
@@ -963,6 +1040,8 @@ export function MedicationLearningGame() {
     setShowAnswer(false)
     setIsCardFlipped(false)
     setCardAnimation("none")
+    setIsProcessingAnswer(false)
+    lastAnswerTime.current = 0
 
     setGameStats((prev) => ({
       ...prev,
@@ -975,131 +1054,145 @@ export function MedicationLearningGame() {
     }
   }
 
-  const handleAnswer = (answer: string | boolean) => {
-    if (!currentQuestion) return
+  const handleAnswer = useCallback(
+    (answer: boolean) => {
+      if (!currentQuestion) return
 
-    if (currentQuestion.type === "flashcard") {
-      const isCorrect = answer === true
-      if (soundEnabled) {
-        playSound(isCorrect ? "correct" : "incorrect")
+      const now = Date.now()
+      if (isProcessingAnswer || now - lastAnswerTime.current < 500) {
+        console.log("⚠️ Ignoring duplicate - too soon")
+        return
       }
 
-      const nextIdx = questionIndex + 1
+      lastAnswerTime.current = now
+      setIsProcessingAnswer(true)
+
+      const answerValue = Boolean(answer)
+
+      if (soundEnabled) {
+        playSound(answerValue ? "correct" : "incorrect")
+      }
+
+      setSessionStats((prev) => ({
+        ...prev,
+        correct: prev.correct + (answerValue ? 1 : 0),
+        incorrect: prev.incorrect + (answerValue ? 0 : 1),
+      }))
 
       setGameStats((prev) => {
-        const progress = prev.flashcardProgress[currentQuestion.medication] || {
+        const oldLevel = prev.level
+
+        const currentProgress = prev.flashcardProgress[currentQuestion.medication] || {
           correct: 0,
           incorrect: 0,
           lastReviewed: new Date().toISOString(),
           bookmarked: false,
         }
 
-        return {
-          ...prev,
-          flashcardProgress: {
-            ...prev.flashcardProgress,
-            [currentQuestion.medication]: {
-              ...progress,
-              correct: progress.correct + (isCorrect ? 1 : 0),
-              incorrect: progress.incorrect + (isCorrect ? 0 : 1),
-              lastReviewed: new Date().toISOString(),
-            },
+        const updatedFlashcardProgress = {
+          ...prev.flashcardProgress,
+          [currentQuestion.medication]: {
+            ...currentProgress,
+            correct: currentProgress.correct + (answerValue ? 1 : 0),
+            incorrect: currentProgress.incorrect + (answerValue ? 0 : 1),
+            lastReviewed: new Date().toISOString(),
           },
         }
-      })
 
-      setSessionStats((prev) => ({
-        ...prev,
-        correct: prev.correct + (isCorrect ? 1 : 0),
-        incorrect: prev.incorrect + (isCorrect ? 0 : 1),
-      }))
-
-      setGameStats((prev) => {
-        const oldLevel = prev.level
-        const newStats = {
+        const baseStats = {
           ...prev,
+          flashcardProgress: updatedFlashcardProgress,
           totalQuestions: prev.totalQuestions + 1,
-          correctAnswers: prev.correctAnswers + (isCorrect ? 1 : 0),
-          streak: isCorrect ? prev.streak + 1 : 0,
-          bestStreak: isCorrect ? Math.max(prev.bestStreak, prev.streak + 1) : prev.bestStreak,
-          experience: prev.experience + (isCorrect ? 5 : 1),
+          correctAnswers: prev.correctAnswers + (answerValue ? 1 : 0),
+          streak: answerValue ? prev.streak + 1 : 0,
+          bestStreak: answerValue ? Math.max(prev.bestStreak, prev.streak + 1) : prev.bestStreak,
+          experience: prev.experience + (answerValue ? 5 : 1),
           lastPlayed: new Date().toISOString(),
           questionsAsked: [...new Set([...prev.questionsAsked, currentQuestion.id])],
           sessionQuestionsAsked: [...prev.sessionQuestionsAsked, currentQuestion.id],
         }
 
-        newStats.level = calculateLevel(newStats.experience)
-        if (soundEnabled && newStats.level > oldLevel) {
+        const { stats: finalStats, newAchievement } = checkAchievements(baseStats)
+
+        finalStats.level = calculateLevel(finalStats.experience)
+
+        if (soundEnabled && finalStats.level > oldLevel) {
           setTimeout(() => playSound("levelup"), 500)
         }
-        checkAchievements(newStats)
-        return newStats
+
+        if (newAchievement) {
+          setTimeout(() => {
+            setRecentAchievement(newAchievement)
+            setShowCelebration(true)
+            setTimeout(() => setShowCelebration(false), 3000)
+          }, 0)
+        }
+
+        return finalStats
       })
 
-      setCardAnimation(isCorrect ? "slide-right" : "slide-left")
+      setCardAnimation(answerValue ? "slide-right" : "slide-left")
 
       setTimeout(() => {
+        const nextIdx = questionIndex + 1
         if (nextIdx < questions.length) {
           setQuestionIndex(nextIdx)
           setCurrentQuestion(questions[nextIdx])
           setIsCardFlipped(false)
           setShowAnswer(false)
           setCardAnimation("slide-in")
-          setTimeout(() => setCardAnimation("none"), 300)
+          setTimeout(() => {
+            setCardAnimation("none")
+            setIsProcessingAnswer(false)
+          }, 300)
         } else {
+          setIsProcessingAnswer(false)
           endGame()
         }
       }, 300)
+    },
+    [currentQuestion, isProcessingAnswer, soundEnabled, questionIndex, questions],
+  )
 
-      return
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (gameMode === "flashcards" && currentQuestion && !isProcessingAnswer) {
+        switch (e.key) {
+          case " ":
+          case "Enter":
+            e.preventDefault()
+            if (!isCardFlipped) {
+              setIsCardFlipped(true)
+              if (soundEnabled) playSound("flip")
+            }
+            break
+          case "ArrowRight":
+            e.preventDefault()
+            if (isCardFlipped) {
+              handleAnswer(true)
+            }
+            break
+          case "ArrowLeft":
+            e.preventDefault()
+            if (isCardFlipped) {
+              handleAnswer(false)
+            }
+            break
+          case "b":
+            e.preventDefault()
+            toggleBookmark()
+            break
+        }
+      }
     }
 
-    setSelectedAnswer(String(answer))
-    setShowAnswer(true)
-    setIsTimerActive(false)
-    setIsCardFlipped(false)
-
-    const isCorrect = String(answer).toLowerCase().trim() === currentQuestion.correctAnswer.toLowerCase().trim()
-
-    if (soundEnabled) {
-      playSound(isCorrect ? "correct" : "incorrect")
-    }
-
-    setSessionStats((prev) => ({
-      ...prev,
-      correct: prev.correct + (isCorrect ? 1 : 0),
-      incorrect: prev.incorrect + (isCorrect ? 0 : 1),
-    }))
-
-    setGameStats((prev) => {
-      const oldLevel = prev.level
-      const newStats = {
-        ...prev,
-        totalQuestions: prev.totalQuestions + 1,
-        correctAnswers: prev.correctAnswers + (isCorrect ? 1 : 0),
-        streak: isCorrect ? prev.streak + 1 : 0,
-        bestStreak: isCorrect ? Math.max(prev.bestStreak, prev.streak + 1) : prev.bestStreak,
-        experience: prev.experience + (isCorrect ? 5 : 1),
-        lastPlayed: new Date().toISOString(),
-        questionsAsked: [...new Set([...prev.questionsAsked, currentQuestion.id])],
-        sessionQuestionsAsked: [...prev.sessionQuestionsAsked, currentQuestion.id],
-      }
-
-      newStats.level = calculateLevel(newStats.experience)
-
-      if (soundEnabled && newStats.level > oldLevel) {
-        setTimeout(() => playSound("levelup"), 500)
-      }
-
-      checkAchievements(newStats)
-
-      return newStats
-    })
-  }
+    window.addEventListener("keydown", handleKeyPress)
+    return () => window.removeEventListener("keydown", handleKeyPress)
+  }, [gameMode, currentQuestion, isCardFlipped, soundEnabled, isProcessingAnswer, handleAnswer])
 
   const handleTimeUp = () => {
     if (!showAnswer) {
-      handleAnswer("")
+      handleAnswer(false)
     }
   }
 
@@ -1127,10 +1220,6 @@ export function MedicationLearningGame() {
       setShowAnswer(false)
       if (soundEnabled) playSound("swipe")
     }
-  }
-
-  const handleFlipCard = () => {
-    setIsCardFlipped(!isCardFlipped)
   }
 
   const endGame = () => {
@@ -1198,8 +1287,21 @@ export function MedicationLearningGame() {
       newStats.level = calculateLevel(newStats.experience)
       finalData.newLevel = newStats.level > oldLevel
 
-      checkAchievements(newStats)
-      return newStats
+      const { stats: updatedStats, newAchievement } = checkAchievements(newStats)
+
+      if (newAchievement) {
+        setTimeout(() => {
+          setRecentAchievement(newAchievement)
+          setShowCelebration(true)
+          setTimeout(() => setShowCelebration(false), 3000)
+        }, 0)
+      }
+
+      if (soundEnabled && updatedStats.level > oldLevel) {
+        setTimeout(() => playSound("levelup"), 500)
+      }
+
+      return updatedStats
     })
 
     setFinalAchievementData(finalData)
@@ -1224,6 +1326,8 @@ export function MedicationLearningGame() {
     setIsTimerActive(false)
     setTimeLeft(30)
     setCardAnimation("none")
+    setIsProcessingAnswer(false)
+    lastAnswerTime.current = 0
   }
 
   const clearQuestionHistory = () => {
@@ -1288,7 +1392,7 @@ export function MedicationLearningGame() {
                 </div>
               </div>
               <h3 className="text-xl font-bold mb-2">Quiz Mode</h3>
-              <p className="text-gray-600 mb-4">Timed questions with variety and smart rotation</p>
+              <p className="text-gray-600 mb-4">Timed questions with variety and rotation</p>
 
               <div className="space-y-2 mb-4">
                 <label className="text-sm font-medium">Difficulty:</label>
@@ -1601,7 +1705,10 @@ export function MedicationLearningGame() {
         >
           <div
             className="relative w-full h-96 cursor-pointer"
-            onClick={() => {
+            onClick={(e) => {
+              if ((e.target as HTMLElement).closest("button")) {
+                return
+              }
               if (soundEnabled) playSound("flip")
               setIsCardFlipped(!isCardFlipped)
             }}
@@ -1636,7 +1743,9 @@ export function MedicationLearningGame() {
                   </Button>
 
                   <div className="text-8xl mb-6 animate-bounce">❓</div>
-                  <div className={`mb-4 ${getMedicationColor(currentQuestion.medication, currentQuestion.category)}`}>
+                  <div
+                    className={`mb-4 ${getMedicationColor(currentQuestion.medication, currentQuestion.category, undefined)}`}
+                  >
                     {getMedicationIcon(
                       currentQuestion.medication,
                       currentQuestion.category,
@@ -1689,11 +1798,13 @@ export function MedicationLearningGame() {
           </div>
         </div>
 
-        {isCardFlipped && !showAnswer && (
+        {isCardFlipped && !isProcessingAnswer && (
           <div className="grid grid-cols-2 gap-4 animate-fade-in">
             <Button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation()
+                e.preventDefault()
                 handleAnswer(false)
               }}
               variant="outline"
@@ -1707,8 +1818,10 @@ export function MedicationLearningGame() {
               </div>
             </Button>
             <Button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation()
+                e.preventDefault()
                 handleAnswer(true)
               }}
               size="lg"
@@ -1753,7 +1866,7 @@ export function MedicationLearningGame() {
             }}
             className="flex items-center gap-2"
           >
-            {questionIndex < questions.length - 1 ? "Skip" : "Finish"}
+            {questionIndex < questions.length - 1 ? "Next" : "Finish"}
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -1792,11 +1905,412 @@ export function MedicationLearningGame() {
   const renderQuestion = () => {
     if (!currentQuestion) return null
 
-    return <div className="text-center p-8">Quiz mode rendering...</div>
+    const handleAnswerSelect = (answer: string) => {
+      if (showAnswer || isProcessingAnswer) return
+      setSelectedAnswer(answer)
+    }
+
+    const submitAnswer = () => {
+      if (!selectedAnswer || showAnswer || isProcessingAnswer) return
+
+      const isCorrect = selectedAnswer === currentQuestion.correctAnswer
+      setShowAnswer(true)
+      setIsProcessingAnswer(true)
+
+      if (soundEnabled) {
+        playSound(isCorrect ? "correct" : "incorrect")
+      }
+
+      setSessionStats((prev) => ({
+        ...prev,
+        correct: prev.correct + (isCorrect ? 1 : 0),
+        incorrect: prev.incorrect + (isCorrect ? 0 : 1),
+      }))
+
+      setGameStats((prev) => {
+        const oldLevel = prev.level
+
+        const updatedFlashcardProgress = {
+          ...prev.flashcardProgress,
+          [currentQuestion.medication]: {
+            ...(prev.flashcardProgress[currentQuestion.medication] || {
+              correct: 0,
+              incorrect: 0,
+              lastReviewed: new Date().toISOString(),
+              bookmarked: false,
+            }),
+            correct: (prev.flashcardProgress[currentQuestion.medication]?.correct || 0) + (isCorrect ? 1 : 0),
+            incorrect: (prev.flashcardProgress[currentQuestion.medication]?.incorrect || 0) + (isCorrect ? 0 : 1),
+            lastReviewed: new Date().toISOString(),
+          },
+        }
+
+        const baseStats = {
+          ...prev,
+          flashcardProgress: updatedFlashcardProgress,
+          totalQuestions: prev.totalQuestions + 1,
+          correctAnswers: prev.correctAnswers + (isCorrect ? 1 : 0),
+          streak: isCorrect ? prev.streak + 1 : 0,
+          bestStreak: isCorrect ? Math.max(prev.bestStreak, prev.streak + 1) : prev.bestStreak,
+          experience: prev.experience + (isCorrect ? 5 : 1),
+          lastPlayed: new Date().toISOString(),
+          questionsAsked: [...new Set([...prev.questionsAsked, currentQuestion.id])],
+          sessionQuestionsAsked: [...prev.sessionQuestionsAsked, currentQuestion.id],
+        }
+
+        const { stats: finalStats, newAchievement } = checkAchievements(baseStats)
+        finalStats.level = calculateLevel(finalStats.experience)
+
+        if (soundEnabled && finalStats.level > oldLevel) {
+          setTimeout(() => playSound("levelup"), 500)
+        }
+
+        if (newAchievement) {
+          setTimeout(() => {
+            setRecentAchievement(newAchievement)
+            setShowCelebration(true)
+            setTimeout(() => setShowCelebration(false), 3000)
+          }, 0)
+        }
+
+        return finalStats
+      })
+
+      setTimeout(() => {
+        setIsProcessingAnswer(false)
+      }, 1500)
+    }
+
+    return (
+      <div className="max-w-4xl mx-auto p-4 space-y-6">
+        <div className="flex flex-wrap justify-between items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={resetGame} size="sm">
+              <Home className="h-4 w-4 mr-2" />
+              Menu
+            </Button>
+            <Badge variant="outline" className="flex items-center gap-1">
+              Question {questionIndex + 1} of {questions.length}
+            </Badge>
+            <Badge variant="secondary" className="flex items-center gap-1">
+              {difficulty === "easy" && "🟢"}
+              {difficulty === "medium" && "🟡"}
+              {difficulty === "hard" && "🔴"}
+              {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}
+            </Badge>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Timer className="h-4 w-4 text-orange-500" />
+              <span
+                className={`font-bold text-lg ${timeLeft < 10 ? "text-red-500 animate-pulse" : "text-gray-700 dark:text-gray-300"}`}
+              >
+                {timeLeft}s
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className="flex items-center gap-1"
+            >
+              {soundEnabled ? "🔊" : "🔇"}
+            </Button>
+          </div>
+        </div>
+
+        <Progress value={((questionIndex + 1) / questions.length) * 100} className="h-2" />
+
+        <Card className="border-4 border-blue-300 shadow-2xl">
+          <CardContent className="p-8">
+            <div className="space-y-6">
+              <div className="flex items-start gap-4">
+                <div className={`text-6xl ${getMedicationColor(currentQuestion.medication, currentQuestion.category)}`}>
+                  {getMedicationIcon(
+                    currentQuestion.medication,
+                    currentQuestion.category,
+                    currentQuestion.questionCategory,
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-blue-600 dark:text-blue-400 mb-2">
+                    {getMedicationType(currentQuestion.medication, currentQuestion.category)}
+                  </h3>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">{currentQuestion.question}</h2>
+
+                  {currentQuestion.type === "fill-blank" ? (
+                    <div className="space-y-4">
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border-2 border-blue-300 shadow-md">
+                        <label className="block text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                          Type your answer below:
+                        </label>
+                        <Input
+                          type="text"
+                          value={selectedAnswer}
+                          onChange={(e) => setSelectedAnswer(e.target.value)}
+                          placeholder="Type your answer here..."
+                          disabled={showAnswer}
+                          className="text-lg p-4 border-2 border-blue-400 focus:border-blue-600 bg-white dark:bg-gray-800 shadow-sm"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !showAnswer && selectedAnswer) {
+                              submitAnswer()
+                            }
+                          }}
+                        />
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                          Press Enter or click Submit when ready
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {currentQuestion.options?.map((option, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleAnswerSelect(option)}
+                          disabled={showAnswer}
+                          className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                            selectedAnswer === option
+                              ? showAnswer
+                                ? option === currentQuestion.correctAnswer
+                                  ? "border-green-500 bg-green-50 dark:bg-green-900/20"
+                                  : "border-red-500 bg-red-50 dark:bg-red-900/20"
+                                : "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                              : showAnswer && option === currentQuestion.correctAnswer
+                                ? "border-green-500 bg-green-50 dark:bg-green-900/20"
+                                : "border-gray-300 hover:border-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+                          } ${showAnswer ? "cursor-not-allowed" : "cursor-pointer"}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{option}</span>
+                            {showAnswer && option === currentQuestion.correctAnswer && (
+                              <CheckCircle className="h-5 w-5 text-green-500" />
+                            )}
+                            {showAnswer && selectedAnswer === option && option !== currentQuestion.correctAnswer && (
+                              <XCircle className="h-5 w-5 text-red-500" />
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {showAnswer && (
+                    <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 animate-fade-in">
+                      <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-2">
+                        <Info className="h-4 w-4" />
+                        Explanation:
+                      </h4>
+                      <p className="text-sm text-blue-800 dark:text-blue-200">{currentQuestion.explanation}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {!showAnswer && (
+                <Button onClick={submitAnswer} disabled={!selectedAnswer || showAnswer} size="lg" className="w-full">
+                  Submit Answer
+                </Button>
+              )}
+
+              {showAnswer && (
+                <Button onClick={nextQuestion} size="lg" className="w-full">
+                  {questionIndex < questions.length - 1 ? "Next Question" : "Finish Quiz"}
+                  <ChevronRight className="h-4 w-4 ml-2" />
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
+          <CardContent className="p-6">
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <div className="text-3xl font-bold text-green-600 flex items-center justify-center gap-1">
+                  {sessionStats.correct}
+                  <CheckCircle className="h-6 w-6" />
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Correct</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-red-600 flex items-center justify-center gap-1">
+                  {sessionStats.incorrect}
+                  <XCircle className="h-6 w-6" />
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Incorrect</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-orange-600 flex items-center justify-center gap-1">
+                  {gameStats.streak}
+                  <Flame className="h-6 w-6" />
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Streak</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {showCelebration && recentAchievement && (
+          <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
+            <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl border-4 border-yellow-400 animate-scale-in pointer-events-auto">
+              <div className="text-center">
+                <div className="text-6xl mb-4">🏆</div>
+                <h3 className="text-2xl font-bold mb-2">Achievement Unlocked!</h3>
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  {recentAchievement.icon}
+                  <span className="font-semibold">{recentAchievement.name}</span>
+                </div>
+                <p className="text-gray-600 dark:text-gray-400 mb-4">{recentAchievement.description}</p>
+                <Badge variant="secondary">+{recentAchievement.reward} XP</Badge>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
   }
 
   const renderStats = () => {
-    return <div className="text-center p-8">Stats rendering...</div>
+    if (!finalAchievementData) return null
+
+    const {
+      score,
+      timeBonus,
+      streakBonus,
+      totalXP,
+      newLevel,
+      perfectGame,
+      newRecord,
+      motivationalMessage,
+      performanceRating,
+      badges,
+    } = finalAchievementData
+
+    return (
+      <div className="max-w-4xl mx-auto p-4 space-y-6">
+        <Card className="bg-gradient-to-r from-purple-500 to-blue-600 text-white">
+          <CardContent className="p-8 text-center">
+            <div className="text-6xl mb-4">{perfectGame ? "🏆" : score >= 80 ? "🌟" : score >= 60 ? "👏" : "💪"}</div>
+            <h2 className="text-4xl font-bold mb-2">Quiz Complete!</h2>
+            <p className="text-xl opacity-90">{motivationalMessage}</p>
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Target className="h-5 w-5 text-blue-500" />
+                Performance
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-sm font-medium">Score</span>
+                    <span className="text-2xl font-bold text-blue-600">{score}%</span>
+                  </div>
+                  <Progress value={score} className="h-3" />
+                </div>
+                <div className="grid grid-cols-2 gap-4 text-center">
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    <div className="text-2xl font-bold text-green-600">{sessionStats.correct}</div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">Correct</div>
+                  </div>
+                  <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                    <div className="text-2xl font-bold text-red-600">{sessionStats.incorrect}</div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">Incorrect</div>
+                  </div>
+                </div>
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-blue-600">{performanceRating}</div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">Performance Rating</div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Zap className="h-5 w-5 text-yellow-500" />
+                Experience Gained
+              </h3>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded">
+                  <span className="text-sm">Base Score</span>
+                  <span className="font-bold text-blue-600">+{score} XP</span>
+                </div>
+                {timeBonus > 0 && (
+                  <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded">
+                    <span className="text-sm flex items-center gap-1">
+                      <Timer className="h-4 w-4" />
+                      Time Bonus
+                    </span>
+                    <span className="font-bold text-green-600">+{timeBonus} XP</span>
+                  </div>
+                )}
+                {streakBonus > 0 && (
+                  <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded">
+                    <span className="text-sm flex items-center gap-1">
+                      <Flame className="h-4 w-4" />
+                      Streak Bonus
+                    </span>
+                    <span className="font-bold text-orange-600">+{streakBonus} XP</span>
+                  </div>
+                )}
+                <div className="border-t pt-3">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold">Total XP Gained</span>
+                    <span className="text-2xl font-bold text-purple-600">+{totalXP} XP</span>
+                  </div>
+                </div>
+                {newLevel && (
+                  <div className="p-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-lg text-center animate-bounce">
+                    <Crown className="h-6 w-6 mx-auto mb-1" />
+                    <div className="font-bold">Level Up!</div>
+                    <div className="text-sm">Now Level {gameStats.level}</div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {badges.length > 0 && (
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Medal className="h-5 w-5 text-yellow-500" />
+                Badges Earned
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {badges.map((badge, index) => (
+                  <Badge key={index} variant="secondary" className="text-sm px-4 py-2">
+                    {badge}
+                  </Badge>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="flex gap-4">
+          <Button onClick={() => startGame("quiz")} size="lg" className="flex-1">
+            <Play className="h-4 w-4 mr-2" />
+            Play Again
+          </Button>
+          <Button onClick={resetGame} variant="outline" size="lg" className="flex-1 bg-transparent">
+            <Home className="h-4 w-4 mr-2" />
+            Main Menu
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
