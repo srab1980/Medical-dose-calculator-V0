@@ -42,6 +42,7 @@ import { medicationData } from "@/data/medicationData"
 let audioContext: AudioContext | null = null
 
 const getAudioContext = () => {
+  if (typeof window === "undefined") return null
   if (!audioContext) {
     audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
   }
@@ -49,9 +50,13 @@ const getAudioContext = () => {
 }
 
 const playSound = (type: "correct" | "incorrect" | "achievement" | "levelup" | "complete" | "flip" | "swipe") => {
+  if (typeof window === "undefined") return
+
   const createTone = (frequency: number, duration: number, type: "sine" | "square" | "triangle" = "sine") => {
     try {
       const context = getAudioContext()
+      if (!context) return
+
       const oscillator = context.createOscillator()
       const gainNode = context.createGain()
 
@@ -472,6 +477,7 @@ interface Achievement {
 }
 
 export function MedicationLearningGame() {
+  const [mounted, setMounted] = useState(false)
   const [gameMode, setGameMode] = useState<"menu" | "quiz" | "flashcards" | "stats">("menu")
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null)
   const [questions, setQuestions] = useState<Question[]>([])
@@ -532,22 +538,39 @@ export function MedicationLearningGame() {
   const [isProcessingAnswer, setIsProcessingAnswer] = useState(false)
   const lastAnswerTime = useRef(0)
 
+  // Handle client-side mounting
   useEffect(() => {
-    const savedStats = localStorage.getItem("medicationGameStats")
-    if (savedStats) {
-      const parsed = JSON.parse(savedStats)
-      setGameStats({
-        ...parsed,
-        questionsAsked: parsed.questionsAsked || [],
-        sessionQuestionsAsked: [],
-        flashcardProgress: parsed.flashcardProgress || {},
-      })
-    }
+    setMounted(true)
   }, [])
 
   useEffect(() => {
-    localStorage.setItem("medicationGameStats", JSON.stringify(gameStats))
-  }, [gameStats])
+    if (!mounted) return
+
+    const savedStats = localStorage.getItem("medicationGameStats")
+    if (savedStats) {
+      try {
+        const parsed = JSON.parse(savedStats)
+        setGameStats({
+          ...parsed,
+          questionsAsked: parsed.questionsAsked || [],
+          sessionQuestionsAsked: [],
+          flashcardProgress: parsed.flashcardProgress || {},
+        })
+      } catch (error) {
+        console.error("Failed to parse saved stats:", error)
+      }
+    }
+  }, [mounted])
+
+  useEffect(() => {
+    if (!mounted) return
+
+    try {
+      localStorage.setItem("medicationGameStats", JSON.stringify(gameStats))
+    } catch (error) {
+      console.error("Failed to save stats:", error)
+    }
+  }, [gameStats, mounted])
 
   useEffect(() => {
     let interval: NodeJS.Timeout
@@ -555,7 +578,7 @@ export function MedicationLearningGame() {
       interval = setInterval(() => {
         setTimeLeft((time) => time - 1)
       }, 1000)
-    } else if (timeLeft === 0) {
+    } else if (timeLeft === 0 && isTimerActive) {
       handleTimeUp()
     }
     return () => clearInterval(interval)
@@ -874,13 +897,7 @@ export function MedicationLearningGame() {
       dosePattern = med.reference.match(/(\d+(?:\.\d+)?)\s*mg\/kg/)
       if (dosePattern) {
         dose = Number.parseFloat(dosePattern[1])
-      } else {
-        console.warn(`Cannot create dosage calculation for ${med.name} - no mg/kg pattern found`)
       }
-    }
-
-    if (dose < 0.1 || dose > 100) {
-      console.warn(`Unusual dose detected for ${med.name}: ${dose} mg/kg/day`)
     }
 
     const totalDose = dose * weight
@@ -1060,7 +1077,6 @@ export function MedicationLearningGame() {
 
       const now = Date.now()
       if (isProcessingAnswer || now - lastAnswerTime.current < 500) {
-        console.log("⚠️ Ignoring duplicate - too soon")
         return
       }
 
@@ -1155,6 +1171,8 @@ export function MedicationLearningGame() {
   )
 
   useEffect(() => {
+    if (!mounted) return
+
     const handleKeyPress = (e: KeyboardEvent) => {
       if (gameMode === "flashcards" && currentQuestion && !isProcessingAnswer) {
         switch (e.key) {
@@ -1188,7 +1206,7 @@ export function MedicationLearningGame() {
 
     window.addEventListener("keydown", handleKeyPress)
     return () => window.removeEventListener("keydown", handleKeyPress)
-  }, [gameMode, currentQuestion, isCardFlipped, soundEnabled, isProcessingAnswer, handleAnswer])
+  }, [mounted, gameMode, currentQuestion, isCardFlipped, soundEnabled, isProcessingAnswer, handleAnswer])
 
   const handleTimeUp = () => {
     if (!showAnswer) {
@@ -1336,6 +1354,24 @@ export function MedicationLearningGame() {
       questionsAsked: [],
       sessionQuestionsAsked: [],
     }))
+  }
+
+  // Don't render until mounted to avoid hydration mismatch
+  if (!mounted) {
+    return (
+      <div className="max-w-4xl mx-auto p-4">
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-3xl font-bold text-center flex items-center justify-center gap-3">
+              <Brain className="h-8 w-8 text-blue-600" />
+              Medication Learning Game
+              <Zap className="h-8 w-8 text-yellow-500" />
+            </CardTitle>
+          </CardHeader>
+        </Card>
+        <div className="text-center py-12">Loading...</div>
+      </div>
+    )
   }
 
   const renderMenu = () => (
@@ -1545,9 +1581,9 @@ export function MedicationLearningGame() {
     const isBookmarked = currentProgress?.bookmarked || false
 
     return (
-      <div className="max-w-4xl mx-auto p-4 space-y-6">
-        <div className="flex flex-wrap justify-between items-center gap-4">
-          <div className="flex items-center gap-2">
+      <div className="max-w-4xl mx-auto p-2 sm:p-4 space-y-4 sm:space-y-6">
+        <div className="flex flex-wrap justify-between items-center gap-2 sm:gap-4">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={resetGame} size="sm">
               <Home className="h-4 w-4 mr-2" />
               Menu
@@ -1586,8 +1622,8 @@ export function MedicationLearningGame() {
         </div>
 
         {showSettings && (
-          <Card className="border-2 border-blue-200 bg-blue-50 animate-fade-in">
-            <CardContent className="p-4 space-y-4">
+          <Card className="border-2 border-blue-200 bg-blue-50 dark:bg-blue-900/20 animate-fade-in">
+            <CardContent className="p-3 sm:p-4 space-y-3 sm:space-y-4">
               <h3 className="font-semibold flex items-center gap-2">
                 <Settings className="h-4 w-4" />
                 Flashcard Settings
@@ -1677,7 +1713,7 @@ export function MedicationLearningGame() {
                 </div>
               </div>
 
-              <div className="text-xs text-gray-600 pt-2 border-t">
+              <div className="text-xs text-gray-600 dark:text-gray-400 pt-2 border-t">
                 <p className="font-semibold mb-1">Keyboard Shortcuts:</p>
                 <div className="grid grid-cols-2 gap-2">
                   <span>• Space/Enter: Flip card</span>
@@ -1704,7 +1740,7 @@ export function MedicationLearningGame() {
           }`}
         >
           <div
-            className="relative w-full h-96 cursor-pointer"
+            className="relative w-full h-[400px] sm:h-96 cursor-pointer"
             onClick={(e) => {
               if ((e.target as HTMLElement).closest("button")) {
                 return
@@ -1725,7 +1761,7 @@ export function MedicationLearningGame() {
                 className="absolute w-full h-full border-4 border-blue-300 shadow-2xl backface-hidden"
                 style={{ backfaceVisibility: "hidden" }}
               >
-                <CardContent className="h-full flex flex-col items-center justify-center p-8 bg-gradient-to-br from-blue-50 to-blue-100 relative">
+                <CardContent className="h-full flex flex-col items-center justify-center p-4 sm:p-8 bg-gradient-to-br from-blue-50 to-blue-100 relative">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1752,8 +1788,10 @@ export function MedicationLearningGame() {
                       currentQuestion.questionCategory,
                     )}
                   </div>
-                  <h2 className="text-3xl font-bold text-blue-900 mb-4 text-center">{currentQuestion.medication}</h2>
-                  <p className="text-xl text-gray-700 text-center mb-8">{currentQuestion.question}</p>
+                  <h2 className="text-xl sm:text-3xl font-bold text-blue-900 mb-4 text-center">
+                    {currentQuestion.medication}
+                  </h2>
+                  <p className="text-base sm:text-xl text-gray-700 text-center mb-8">{currentQuestion.question}</p>
 
                   {currentProgress && (
                     <div className="absolute bottom-4 left-4 right-4 flex justify-between text-xs text-gray-500">
@@ -1782,8 +1820,8 @@ export function MedicationLearningGame() {
                   transform: "rotateY(180deg)",
                 }}
               >
-                <CardContent className="h-full flex flex-col items-center justify-center p-8 bg-gradient-to-br from-green-50 to-green-100">
-                  <div className="text-8xl mb-6">✅</div>
+                <CardContent className="h-full flex flex-col items-center justify-center p-4 sm:p-8 bg-gradient-to-br from-green-50 to-green-100">
+                  <div className="text-6xl sm:text-8xl mb-6">✅</div>
                   <div className={`mb-4 ${getMedicationColor(currentQuestion.medication, currentQuestion.category)}`}>
                     {getMedicationIcon(currentQuestion.medication, currentQuestion.category)}
                   </div>
@@ -1799,7 +1837,7 @@ export function MedicationLearningGame() {
         </div>
 
         {isCardFlipped && !isProcessingAnswer && (
-          <div className="grid grid-cols-2 gap-4 animate-fade-in">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 animate-fade-in">
             <Button
               type="button"
               onClick={(e) => {
@@ -1809,7 +1847,7 @@ export function MedicationLearningGame() {
               }}
               variant="outline"
               size="lg"
-              className="flex items-center justify-center gap-2 px-8 py-6 border-2 border-red-400 hover:bg-red-50"
+              className="flex items-center justify-center gap-2 px-6 py-6 sm:px-8 sm:py-6 border-2 border-red-400 hover:bg-red-50 min-h-[60px]"
             >
               <ArrowLeft className="h-5 w-5" />
               <div className="text-left">
@@ -1825,7 +1863,7 @@ export function MedicationLearningGame() {
                 handleAnswer(true)
               }}
               size="lg"
-              className="flex items-center justify-center gap-2 px-8 py-6 bg-green-600 hover:bg-green-700"
+              className="flex items-center justify-center gap-2 px-6 py-6 sm:px-8 sm:py-6 bg-green-600 hover:bg-green-700 min-h-[60px]"
             >
               <div className="text-right">
                 <div className="font-bold">I Knew This!</div>
@@ -1871,29 +1909,29 @@ export function MedicationLearningGame() {
           </Button>
         </div>
 
-        <Card className="bg-gradient-to-r from-gray-50 to-gray-100">
-          <CardContent className="p-6">
-            <div className="grid grid-cols-3 gap-4 text-center">
+        <Card className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
+          <CardContent className="p-4 sm:p-6">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 text-center">
               <div>
                 <div className="text-3xl font-bold text-green-600 flex items-center justify-center gap-1">
                   {sessionStats.correct}
                   <CheckCircle className="h-6 w-6" />
                 </div>
-                <div className="text-sm text-gray-600">Known</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Known</div>
               </div>
               <div>
                 <div className="text-3xl font-bold text-red-600 flex items-center justify-center gap-1">
                   {sessionStats.incorrect}
                   <XCircle className="h-6 w-6" />
                 </div>
-                <div className="text-sm text-gray-600">To Study</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">To Study</div>
               </div>
               <div>
                 <div className="text-3xl font-bold text-orange-600 flex items-center justify-center gap-1">
                   {gameStats.streak}
                   <Flame className="h-6 w-6" />
                 </div>
-                <div className="text-sm text-gray-600">Streak</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Streak</div>
               </div>
             </div>
           </CardContent>
@@ -1982,9 +2020,9 @@ export function MedicationLearningGame() {
     }
 
     return (
-      <div className="max-w-4xl mx-auto p-4 space-y-6">
-        <div className="flex flex-wrap justify-between items-center gap-4">
-          <div className="flex items-center gap-2">
+      <div className="max-w-4xl mx-auto p-2 sm:p-4 space-y-4 sm:space-y-6">
+        <div className="flex flex-wrap justify-between items-center gap-2 sm:gap-4">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={resetGame} size="sm">
               <Home className="h-4 w-4 mr-2" />
               Menu
@@ -2022,22 +2060,26 @@ export function MedicationLearningGame() {
 
         <Progress value={((questionIndex + 1) / questions.length) * 100} className="h-2" />
 
-        <Card className="border-4 border-blue-300 shadow-2xl">
-          <CardContent className="p-8">
+        <Card className="border-2 sm:border-4 border-blue-300 shadow-2xl">
+          <CardContent className="p-4 sm:p-8">
             <div className="space-y-6">
-              <div className="flex items-start gap-4">
-                <div className={`text-6xl ${getMedicationColor(currentQuestion.medication, currentQuestion.category)}`}>
+              <div className="flex flex-col sm:flex-row items-start sm:items-start gap-3 sm:gap-4">
+                <div
+                  className={`text-4xl sm:text-6xl ${getMedicationColor(currentQuestion.medication, currentQuestion.category)}`}
+                >
                   {getMedicationIcon(
                     currentQuestion.medication,
                     currentQuestion.category,
                     currentQuestion.questionCategory,
                   )}
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 w-full">
                   <h3 className="text-sm font-semibold text-blue-600 dark:text-blue-400 mb-2">
                     {getMedicationType(currentQuestion.medication, currentQuestion.category)}
                   </h3>
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">{currentQuestion.question}</h2>
+                  <h2 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white mb-4">
+                    {currentQuestion.question}
+                  </h2>
 
                   {currentQuestion.type === "fill-blank" ? (
                     <div className="space-y-4">
@@ -2065,13 +2107,13 @@ export function MedicationLearningGame() {
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-2 sm:space-y-3">
                       {currentQuestion.options?.map((option, index) => (
                         <button
                           key={index}
                           onClick={() => handleAnswerSelect(option)}
                           disabled={showAnswer}
-                          className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                          className={`w-full text-left p-3 sm:p-4 rounded-lg border-2 transition-all min-h-[52px] ${
                             selectedAnswer === option
                               ? showAnswer
                                 ? option === currentQuestion.correctAnswer
@@ -2084,12 +2126,12 @@ export function MedicationLearningGame() {
                           } ${showAnswer ? "cursor-not-allowed" : "cursor-pointer"}`}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="font-medium">{option}</span>
+                            <span className="font-medium text-sm sm:text-base">{option}</span>
                             {showAnswer && option === currentQuestion.correctAnswer && (
-                              <CheckCircle className="h-5 w-5 text-green-500" />
+                              <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
                             )}
                             {showAnswer && selectedAnswer === option && option !== currentQuestion.correctAnswer && (
-                              <XCircle className="h-5 w-5 text-red-500" />
+                              <XCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
                             )}
                           </div>
                         </button>
@@ -2098,8 +2140,8 @@ export function MedicationLearningGame() {
                   )}
 
                   {showAnswer && (
-                    <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 animate-fade-in">
-                      <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-2">
+                    <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 animate-fade-in">
+                      <h4 className="font-semibold text-sm sm:text-base text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-2">
                         <Info className="h-4 w-4" />
                         Explanation:
                       </h4>
@@ -2110,7 +2152,12 @@ export function MedicationLearningGame() {
               </div>
 
               {!showAnswer && (
-                <Button onClick={submitAnswer} disabled={!selectedAnswer || showAnswer} size="lg" className="w-full">
+                <Button
+                  onClick={submitAnswer}
+                  disabled={!selectedAnswer || showAnswer}
+                  size="lg"
+                  className="w-full py-4 sm:py-3 text-base sm:text-lg"
+                >
                   Submit Answer
                 </Button>
               )}
@@ -2126,8 +2173,8 @@ export function MedicationLearningGame() {
         </Card>
 
         <Card className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
-          <CardContent className="p-6">
-            <div className="grid grid-cols-3 gap-4 text-center">
+          <CardContent className="p-4 sm:p-6">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 text-center">
               <div>
                 <div className="text-3xl font-bold text-green-600 flex items-center justify-center gap-1">
                   {sessionStats.correct}
@@ -2154,16 +2201,16 @@ export function MedicationLearningGame() {
         </Card>
 
         {showCelebration && recentAchievement && (
-          <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-            <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl border-4 border-yellow-400 animate-scale-in pointer-events-auto">
+          <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none p-4">
+            <div className="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-lg shadow-2xl border-4 border-yellow-400 animate-scale-in pointer-events-auto max-w-sm">
               <div className="text-center">
                 <div className="text-6xl mb-4">🏆</div>
-                <h3 className="text-2xl font-bold mb-2">Achievement Unlocked!</h3>
+                <h3 className="text-xl sm:text-2xl font-bold mb-2">Achievement Unlocked!</h3>
                 <div className="flex items-center justify-center gap-2 mb-2">
                   {recentAchievement.icon}
                   <span className="font-semibold">{recentAchievement.name}</span>
                 </div>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">{recentAchievement.description}</p>
+                <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">{recentAchievement.description}</p>
                 <Badge variant="secondary">+{recentAchievement.reward} XP</Badge>
               </div>
             </div>
@@ -2299,7 +2346,7 @@ export function MedicationLearningGame() {
           </Card>
         )}
 
-        <div className="flex gap-4">
+        <div className="flex flex-col sm:flex-row gap-4">
           <Button onClick={() => startGame("quiz")} size="lg" className="flex-1">
             <Play className="h-4 w-4 mr-2" />
             Play Again
@@ -2317,11 +2364,10 @@ export function MedicationLearningGame() {
     <div className="max-w-4xl mx-auto p-4">
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-3xl font-bold text-center flex items-center justify-center gap-3">
-            <Brain className="h-8 w-8 text-blue-600" />
-            Medication Learning Game
-            <Zap className="h-8 w-8 text-yellow-500" />
-            {MedicationIcons.antibiotic("w-8 h-8 text-green-500")}
+          <CardTitle className="text-2xl sm:text-3xl font-bold text-center flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+            <Brain className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" />
+            <span>Medication Learning Game</span>
+            <Zap className="h-6 w-6 sm:h-8 sm:w-8 text-yellow-500" />
           </CardTitle>
         </CardHeader>
       </Card>

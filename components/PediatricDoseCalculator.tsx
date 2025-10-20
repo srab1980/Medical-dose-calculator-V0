@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
@@ -139,7 +138,7 @@ export function PediatricDoseCalculator() {
   }
 
   const validateForm = () => {
-    const newErrors: { [key: string]: string } = {}
+    const newErrors: { [key: string]: string } = {} // Initialize newErrors correctly
     if (!formInputs.ageYears && !formInputs.ageMonths) {
       newErrors.age = "Please enter either years or months"
     }
@@ -265,7 +264,7 @@ export function PediatricDoseCalculator() {
       const updatedCalculations = [...savedCalculations, newCalculation]
       setSavedCalculations(updatedCalculations)
       setCalculationHistory(updatedCalculations)
-      localStorage.setItem("savedCalculations", JSON.JSON.stringify(updatedCalculations))
+      localStorage.setItem("savedCalculations", JSON.stringify(updatedCalculations))
     }
   }
 
@@ -284,7 +283,7 @@ export function PediatricDoseCalculator() {
       }
       const updatedProfiles = [...patientProfiles, newProfile]
       setPatientProfiles(updatedProfiles)
-      localStorage.setItem("patientProfiles", JSON.JSON.stringify(updatedProfiles))
+      localStorage.setItem("patientProfiles", JSON.stringify(updatedProfiles))
     }
   }
 
@@ -393,12 +392,12 @@ export function PediatricDoseCalculator() {
   const renderMedicationForm = () => (
     <form onSubmit={handleCalculate} className="space-y-4">
       {/* Patient Information Section */}
-      <Card className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-        <h4 className="font-semibold mb-3 flex items-center gap-2 text-blue-900 dark:text-blue-100">
+      <Card className="p-3 sm:p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+        <h4 className="font-semibold mb-2 sm:mb-3 flex items-center gap-2 text-sm sm:text-base text-blue-900 dark:text-blue-100">
           <Info className="h-4 w-4" />
           Patient Information
         </h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
           <div>
             <Label htmlFor="patientName" className="dark:text-white">
               Patient Name (Optional)
@@ -450,7 +449,7 @@ export function PediatricDoseCalculator() {
         </Card>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <div>
           <Label htmlFor="ageYears" className="dark:text-white">
             Age (Years) *
@@ -545,7 +544,7 @@ export function PediatricDoseCalculator() {
           {showSearchDropdown && (
             <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto">
               {filteredMedications.length === 0 ? (
-                <div className="p-3 text-sm text-gray-500 dark:text-gray-400">
+                <div className="p-4 text-sm text-gray-500 dark:text-gray-400">
                   No medications found for "{searchTerm}"
                 </div>
               ) : (
@@ -554,10 +553,10 @@ export function PediatricDoseCalculator() {
                     key={med.name}
                     type="button"
                     onClick={() => handleMedicationSelect(med.name)}
-                    className="w-full text-left p-3 hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                    className="w-full text-left p-4 hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-b-0 active:bg-gray-200 dark:active:bg-gray-600 transition-colors"
                   >
-                    <div className="font-medium text-sm dark:text-white">{med.name}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{med.reference}</div>
+                    <div className="font-medium text-sm sm:text-base dark:text-white">{med.name}</div>
+                    <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">{med.reference}</div>
                   </button>
                 ))
               )}
@@ -593,21 +592,23 @@ export function PediatricDoseCalculator() {
         )}
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row gap-2">
         <Button
           type="submit"
-          className="flex-1 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-md"
+          className="flex-1 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white font-semibold py-3 px-4 sm:px-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-md text-sm sm:text-base"
           disabled={isLoading || !formInputs.medication}
         >
           {isLoading ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 justify-center">
               <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-              Calculating...
+              <span className="hidden sm:inline">Calculating...</span>
+              <span className="sm:hidden">Loading...</span>
             </div>
           ) : (
             <>
-              <Calculator className="h-4 w-4 mr-2" />
-              Calculate Dose
+              <Calculator className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Calculate Dose</span>
+              <span className="sm:hidden">Calculate</span>
             </>
           )}
         </Button>
@@ -615,7 +616,7 @@ export function PediatricDoseCalculator() {
           type="button"
           variant="outline"
           onClick={handleClear}
-          className="border-2 border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-800 bg-transparent"
+          className="border-2 border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium py-3 px-4 sm:px-6 rounded-lg transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-800 bg-transparent text-sm sm:text-base"
         >
           Clear
         </Button>
@@ -630,10 +631,10 @@ export function PediatricDoseCalculator() {
   )
 
   return (
-    <div className={`container mx-auto p-4 ${isDarkMode ? "dark" : ""}`}>
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Pediatric Dose Calculator</h1>
-        <div className="flex items-center space-x-4">
+    <div className={`container mx-auto p-2 sm:p-4 ${isDarkMode ? "dark" : ""}`}>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Pediatric Dose Calculator</h1>
+        <div className="flex items-center space-x-2 sm:space-x-4">
           <Badge variant="secondary" className="text-xs">
             v2.0 Enhanced
           </Badge>
@@ -645,7 +646,7 @@ export function PediatricDoseCalculator() {
         </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
         <Card className="w-full lg:w-2/3 dark:bg-gray-800">
           <CardHeader>
             <CardTitle className="text-2xl font-bold text-center dark:text-white flex items-center justify-center gap-2">
@@ -655,10 +656,16 @@ export function PediatricDoseCalculator() {
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={handleTabChange}>
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="antibiotics">Antibiotics ({medicationData.antibiotics.length})</TabsTrigger>
-                <TabsTrigger value="other">Other Medications ({medicationData.other.length})</TabsTrigger>
-                <TabsTrigger value="game">Learning Game</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-3 h-auto">
+                <TabsTrigger value="antibiotics" className="text-xs sm:text-sm px-2 py-2">
+                  Antibiotics <span className="hidden sm:inline">({medicationData.antibiotics.length})</span>
+                </TabsTrigger>
+                <TabsTrigger value="other" className="text-xs sm:text-sm px-2 py-2">
+                  Other <span className="hidden sm:inline">Medications ({medicationData.other.length})</span>
+                </TabsTrigger>
+                <TabsTrigger value="game" className="text-xs sm:text-sm px-2 py-2">
+                  <span className="hidden sm:inline">Learning </span>Game
+                </TabsTrigger>
               </TabsList>
               <TabsContent value="antibiotics">{renderMedicationForm()}</TabsContent>
               <TabsContent value="other">{renderMedicationForm()}</TabsContent>
@@ -755,14 +762,17 @@ export function PediatricDoseCalculator() {
                         </a>
                       </div>
 
-                      <div className="flex gap-2 mt-4">
-                        <Button onClick={handleSave} className="flex items-center gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                        <Button
+                          onClick={handleSave}
+                          className="flex items-center justify-center gap-2 text-sm sm:text-base"
+                        >
                           <History className="h-4 w-4" />
                           Save Calculation
                         </Button>
                         <Button
                           onClick={handlePrint}
-                          className="flex items-center gap-2 bg-transparent"
+                          className="flex items-center justify-center gap-2 bg-transparent text-sm sm:text-base"
                           variant="outline"
                         >
                           <Printer className="h-4 w-4" />
@@ -779,14 +789,28 @@ export function PediatricDoseCalculator() {
                         Drug Information: {drugInfo.brandName || drugInfo.drugName} ({drugInfo.genericName || "N/A"})
                       </h3>
                       <Tabs defaultValue="indications">
-                        <TabsList className="grid grid-cols-4 lg:grid-cols-7">
-                          <TabsTrigger value="indications">Indications</TabsTrigger>
-                          <TabsTrigger value="dosage">Dosage</TabsTrigger>
-                          <TabsTrigger value="warnings">Warnings</TabsTrigger>
-                          <TabsTrigger value="precautions">Precautions</TabsTrigger>
-                          <TabsTrigger value="interactions">Interactions</TabsTrigger>
-                          <TabsTrigger value="adverse">Adverse</TabsTrigger>
-                          <TabsTrigger value="pediatric">Pediatric</TabsTrigger>
+                        <TabsList className="grid grid-cols-4 lg:grid-cols-7 gap-1 h-auto">
+                          <TabsTrigger value="indications" className="text-xs sm:text-sm px-2 py-2">
+                            Indications
+                          </TabsTrigger>
+                          <TabsTrigger value="dosage" className="text-xs sm:text-sm px-2 py-2">
+                            Dosage
+                          </TabsTrigger>
+                          <TabsTrigger value="warnings" className="text-xs sm:text-sm px-2 py-2">
+                            Warnings
+                          </TabsTrigger>
+                          <TabsTrigger value="precautions" className="text-xs sm:text-sm px-2 py-2">
+                            Precautions
+                          </TabsTrigger>
+                          <TabsTrigger value="interactions" className="text-xs sm:text-sm px-2 py-2">
+                            Interactions
+                          </TabsTrigger>
+                          <TabsTrigger value="adverse" className="text-xs sm:text-sm px-2 py-2">
+                            Adverse
+                          </TabsTrigger>
+                          <TabsTrigger value="pediatric" className="text-xs sm:text-sm px-2 py-2">
+                            Pediatric
+                          </TabsTrigger>
                         </TabsList>
                         <TabsContent value="indications">
                           <ScrollArea className="h-[300px] p-4">
@@ -1019,7 +1043,7 @@ export function PediatricDoseCalculator() {
           </CardContent>
         </Card>
 
-        <Card className="w-full lg:w-1/3 dark:bg-gray-800">
+        <Card className="w-full lg:w-1/3 dark:bg-gray-800 lg:sticky lg:top-4">
           <CardHeader>
             <CardTitle className="text-xl font-bold dark:text-white flex items-center gap-2">
               <BookOpen className="h-5 w-5" />
@@ -1066,15 +1090,52 @@ export function PediatricDoseCalculator() {
       </div>
 
       {savedCalculations.length > 0 && (
-        <Card className="mt-6 dark:bg-gray-800">
+        <Card className="mt-4 sm:mt-6 dark:bg-gray-800">
           <CardHeader>
-            <CardTitle className="text-xl font-bold dark:text-white flex items-center gap-2">
-              <History className="h-5 w-5" />
+            <CardTitle className="text-lg sm:text-xl font-bold dark:text-white flex items-center gap-2">
+              <History className="h-4 w-4 sm:h-5 sm:w-5" />
               Calculation History ({savedCalculations.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-[300px]">
+            {/* Mobile Card View */}
+            <div className="block lg:hidden space-y-3">
+              {savedCalculations.map((calc) => (
+                <Card key={calc.id} className="p-3 bg-gray-50 dark:bg-gray-700">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="font-semibold dark:text-white">Date:</span>
+                      <span className="dark:text-gray-300">{calc.date}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold dark:text-white">Medication:</span>
+                      <span className="dark:text-gray-300">{calc.medication}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold dark:text-white">Patient:</span>
+                      <span className="dark:text-gray-300">
+                        {calc.patientAge} / {calc.patientWeight}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold dark:text-white">Dose:</span>
+                      <span className="dark:text-gray-300">{calc.dose}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold dark:text-white">Volume:</span>
+                      <span className="dark:text-gray-300">{calc.doseMl}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold dark:text-white">Frequency:</span>
+                      <span className="dark:text-gray-300">{calc.frequency}</span>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <ScrollArea className="hidden lg:block h-[300px]">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
