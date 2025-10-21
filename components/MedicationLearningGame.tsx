@@ -25,15 +25,13 @@ import {
   RotateCw,
   ChevronLeft,
   ChevronRight,
-  Repeat,
-  Filter,
   Star,
   StarOff,
   Settings,
   ArrowLeft,
   ArrowRight,
-  Sparkles,
   Info,
+  X,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { medicationData } from "@/data/medicationData"
@@ -537,6 +535,12 @@ export function MedicationLearningGame() {
 
   const [isProcessingAnswer, setIsProcessingAnswer] = useState(false)
   const lastAnswerTime = useRef(0)
+
+  // Touch gesture handling
+  const touchStartX = useRef(0)
+  const touchStartY = useRef(0)
+  const touchEndX = useRef(0)
+  const touchEndY = useRef(0)
 
   // Handle client-side mounting
   useEffect(() => {
@@ -1170,6 +1174,35 @@ export function MedicationLearningGame() {
     [currentQuestion, isProcessingAnswer, soundEnabled, questionIndex, questions],
   )
 
+  // Handle touch gestures
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
+    touchStartY.current = e.touches[0].clientY
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX
+    touchEndY.current = e.touches[0].clientY
+  }
+
+  const handleTouchEnd = () => {
+    if (!isCardFlipped || isProcessingAnswer) return
+
+    const deltaX = touchEndX.current - touchStartX.current
+    const deltaY = Math.abs(touchEndY.current - touchStartY.current)
+
+    // Only process horizontal swipes (vertical scrolling should work normally)
+    if (Math.abs(deltaX) > 50 && deltaY < 50) {
+      if (deltaX > 0) {
+        // Swipe right - "I knew this"
+        handleAnswer(true)
+      } else {
+        // Swipe left - "Need to study"
+        handleAnswer(false)
+      }
+    }
+  }
+
   useEffect(() => {
     if (!mounted) return
 
@@ -1581,58 +1614,54 @@ export function MedicationLearningGame() {
     const isBookmarked = currentProgress?.bookmarked || false
 
     return (
-      <div className="max-w-4xl mx-auto p-2 sm:p-4 space-y-4 sm:space-y-6">
-        <div className="flex flex-wrap justify-between items-center gap-2 sm:gap-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={resetGame} size="sm">
-              <Home className="h-4 w-4 mr-2" />
-              Menu
+      <div className="max-w-2xl mx-auto px-3 py-4 space-y-4">
+        {/* Compact Mobile Header */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <Button variant="outline" onClick={resetGame} size="sm" className="h-9 bg-transparent">
+              <Home className="h-4 w-4 mr-1.5" />
+              <span className="hidden xs:inline">Menu</span>
             </Button>
-            <Badge variant="outline" className="flex items-center gap-1">
-              <Sparkles className="h-3 w-3" />
-              Card {questionIndex + 1} of {questions.length}
-            </Badge>
-            <Badge variant="secondary" className="flex items-center gap-1">
-              {category === "all" && <Shuffle className="h-3 w-3" />}
-              {category === "antibiotics" && MedicationIcons.antibiotic("w-3 h-3")}
-              {category === "other" && MedicationIcons.painkiller("w-3 h-3")}
-              {category === "all" ? "Mixed" : category === "antibiotics" ? "Antibiotics" : "Other Meds"}
-            </Badge>
+
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs px-2 py-1">
+                {questionIndex + 1}/{questions.length}
+              </Badge>
+              <Button variant="ghost" size="sm" onClick={() => setSoundEnabled(!soundEnabled)} className="h-9 w-9 p-0">
+                {soundEnabled ? "🔊" : "🔇"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSettings(!showSettings)}
+                className="h-9 w-9 p-0"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowSettings(!showSettings)}
-              className="flex items-center gap-1"
-            >
-              <Settings className="h-4 w-4" />
-              Settings
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSoundEnabled(!soundEnabled)}
-              className="flex items-center gap-1"
-            >
-              {soundEnabled ? "🔊" : "🔇"}
-            </Button>
-          </div>
+          <Progress value={((questionIndex + 1) / questions.length) * 100} className="h-2" />
         </div>
 
+        {/* Collapsible Settings Panel - Mobile Optimized */}
         {showSettings && (
-          <Card className="border-2 border-blue-200 bg-blue-50 dark:bg-blue-900/20 animate-fade-in">
-            <CardContent className="p-3 sm:p-4 space-y-3 sm:space-y-4">
-              <h3 className="font-semibold flex items-center gap-2">
-                <Settings className="h-4 w-4" />
-                Flashcard Settings
-              </h3>
+          <Card className="border-2 border-blue-200 bg-blue-50 dark:bg-blue-900/20">
+            <CardContent className="p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </h3>
+                <Button variant="ghost" size="sm" onClick={() => setShowSettings(false)} className="h-8 w-8 p-0">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Filter Cards</label>
-                  <div className="flex flex-col gap-2">
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium block mb-2">Filter</label>
+                  <div className="grid grid-cols-3 gap-2">
                     <Button
                       variant={flashcardFilter === "all" ? "default" : "outline"}
                       size="sm"
@@ -1640,10 +1669,9 @@ export function MedicationLearningGame() {
                         setFlashcardFilter("all")
                         startGame("flashcards")
                       }}
-                      className="w-full justify-start"
+                      className="text-xs h-8"
                     >
-                      <Filter className="h-3 w-3 mr-2" />
-                      All Cards
+                      All
                     </Button>
                     <Button
                       variant={flashcardFilter === "needReview" ? "default" : "outline"}
@@ -1652,10 +1680,9 @@ export function MedicationLearningGame() {
                         setFlashcardFilter("needReview")
                         startGame("flashcards")
                       }}
-                      className="w-full justify-start"
+                      className="text-xs h-8"
                     >
-                      <Repeat className="h-3 w-3 mr-2" />
-                      Need Review
+                      Review
                     </Button>
                     <Button
                       variant={flashcardFilter === "bookmarked" ? "default" : "outline"}
@@ -1664,70 +1691,52 @@ export function MedicationLearningGame() {
                         setFlashcardFilter("bookmarked")
                         startGame("flashcards")
                       }}
-                      className="w-full justify-start"
+                      className="text-xs h-8"
                     >
-                      <Star className="h-3 w-3 mr-2" />
-                      Bookmarked
+                      <Star className="h-3 w-3" />
                     </Button>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Card Order</label>
-                  <Button
-                    variant={isShuffled ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      setIsShuffled(!isShuffled)
-                      startGame("flashcards")
-                    }}
-                    className="w-full"
-                  >
-                    <Shuffle className="h-3 w-3 mr-2" />
-                    {isShuffled ? "Shuffled" : "Sequential"}
-                  </Button>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Auto Advance</label>
-                  <Button
-                    variant={autoAdvance ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setAutoAdvance(!autoAdvance)}
-                    className="w-full"
-                  >
-                    <Timer className="h-3 w-3 mr-2" />
-                    {autoAdvance ? "Enabled" : "Disabled"}
-                  </Button>
-                  {autoAdvance && (
-                    <select
-                      value={autoAdvanceDelay}
-                      onChange={(e) => setAutoAdvanceDelay(Number(e.target.value))}
-                      className="w-full p-2 border rounded text-sm"
+                <div>
+                  <label className="text-xs font-medium block mb-2">Options</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant={isShuffled ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setIsShuffled(!isShuffled)
+                        startGame("flashcards")
+                      }}
+                      className="text-xs h-8"
                     >
-                      <option value={2000}>2 seconds</option>
-                      <option value={3000}>3 seconds</option>
-                      <option value={5000}>5 seconds</option>
-                    </select>
-                  )}
+                      <Shuffle className="h-3 w-3 mr-1" />
+                      Shuffle
+                    </Button>
+                    <Button
+                      variant={autoAdvance ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setAutoAdvance(!autoAdvance)}
+                      className="text-xs h-8"
+                    >
+                      <Timer className="h-3 w-3 mr-1" />
+                      Auto
+                    </Button>
+                  </div>
                 </div>
-              </div>
 
-              <div className="text-xs text-gray-600 dark:text-gray-400 pt-2 border-t">
-                <p className="font-semibold mb-1">Keyboard Shortcuts:</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <span>• Space/Enter: Flip card</span>
-                  <span>• Right Arrow: I knew this</span>
-                  <span>• Left Arrow: Need to study</span>
-                  <span>• B: Bookmark card</span>
+                <div className="text-xs text-gray-600 dark:text-gray-400 pt-2 border-t space-y-1">
+                  <p className="font-semibold">Controls:</p>
+                  <p>• Tap card to flip</p>
+                  <p>• Swipe left: Need study</p>
+                  <p>• Swipe right: I know</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         )}
 
-        <Progress value={((questionIndex + 1) / questions.length) * 100} className="h-2" />
-
+        {/* Flashcard - Mobile Optimized with Touch Gestures */}
         <div
           className={`transition-all duration-300 ${
             cardAnimation === "slide-left"
@@ -1740,7 +1749,7 @@ export function MedicationLearningGame() {
           }`}
         >
           <div
-            className="relative w-full h-[400px] sm:h-96 cursor-pointer"
+            className="relative w-full h-[450px] xs:h-[400px] cursor-pointer touch-none"
             onClick={(e) => {
               if ((e.target as HTMLElement).closest("button")) {
                 return
@@ -1748,6 +1757,9 @@ export function MedicationLearningGame() {
               if (soundEnabled) playSound("flip")
               setIsCardFlipped(!isCardFlipped)
             }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
             style={{ perspective: "1000px" }}
           >
             <div
@@ -1757,11 +1769,12 @@ export function MedicationLearningGame() {
                 transform: isCardFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
               }}
             >
+              {/* Front of Card */}
               <Card
-                className="absolute w-full h-full border-4 border-blue-300 shadow-2xl backface-hidden"
+                className="absolute w-full h-full border-4 border-blue-300 shadow-2xl"
                 style={{ backfaceVisibility: "hidden" }}
               >
-                <CardContent className="h-full flex flex-col items-center justify-center p-4 sm:p-8 bg-gradient-to-br from-blue-50 to-blue-100 relative">
+                <CardContent className="h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 relative">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1769,7 +1782,7 @@ export function MedicationLearningGame() {
                       e.stopPropagation()
                       toggleBookmark()
                     }}
-                    className="absolute top-4 right-4"
+                    className="absolute top-3 right-3 h-9 w-9 p-0"
                   >
                     {isBookmarked ? (
                       <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
@@ -1778,9 +1791,9 @@ export function MedicationLearningGame() {
                     )}
                   </Button>
 
-                  <div className="text-8xl mb-6 animate-bounce">❓</div>
+                  <div className="text-6xl mb-4 animate-bounce">❓</div>
                   <div
-                    className={`mb-4 ${getMedicationColor(currentQuestion.medication, currentQuestion.category, undefined)}`}
+                    className={`mb-3 ${getMedicationColor(currentQuestion.medication, currentQuestion.category, undefined)}`}
                   >
                     {getMedicationIcon(
                       currentQuestion.medication,
@@ -1788,46 +1801,47 @@ export function MedicationLearningGame() {
                       currentQuestion.questionCategory,
                     )}
                   </div>
-                  <h2 className="text-xl sm:text-3xl font-bold text-blue-900 mb-4 text-center">
+                  <h2 className="text-xl font-bold text-blue-900 mb-3 text-center px-2">
                     {currentQuestion.medication}
                   </h2>
-                  <p className="text-base sm:text-xl text-gray-700 text-center mb-8">{currentQuestion.question}</p>
+                  <p className="text-base text-gray-700 text-center mb-6 px-3">{currentQuestion.question}</p>
 
                   {currentProgress && (
-                    <div className="absolute bottom-4 left-4 right-4 flex justify-between text-xs text-gray-500">
+                    <div className="absolute bottom-12 left-4 right-4 flex justify-between text-xs text-gray-500">
                       <span className="flex items-center gap-1">
                         <CheckCircle className="h-3 w-3 text-green-500" />
-                        {currentProgress.correct} correct
+                        {currentProgress.correct}
                       </span>
                       <span className="flex items-center gap-1">
                         <XCircle className="h-3 w-3 text-red-500" />
-                        {currentProgress.incorrect} incorrect
+                        {currentProgress.incorrect}
                       </span>
                     </div>
                   )}
 
-                  <div className="absolute bottom-4 text-sm text-gray-500 animate-pulse flex items-center gap-2">
-                    <RotateCw className="h-4 w-4" />
-                    <span>Click or press Space to flip</span>
+                  <div className="absolute bottom-3 text-xs text-gray-500 animate-pulse flex items-center gap-1.5">
+                    <RotateCw className="h-3.5 w-3.5" />
+                    <span>Tap to flip</span>
                   </div>
                 </CardContent>
               </Card>
 
+              {/* Back of Card */}
               <Card
-                className="absolute w-full h-full border-4 border-green-300 shadow-2xl backface-hidden"
+                className="absolute w-full h-full border-4 border-green-300 shadow-2xl"
                 style={{
                   backfaceVisibility: "hidden",
                   transform: "rotateY(180deg)",
                 }}
               >
-                <CardContent className="h-full flex flex-col items-center justify-center p-4 sm:p-8 bg-gradient-to-br from-green-50 to-green-100">
-                  <div className="text-6xl sm:text-8xl mb-6">✅</div>
-                  <div className={`mb-4 ${getMedicationColor(currentQuestion.medication, currentQuestion.category)}`}>
+                <CardContent className="h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-green-50 to-green-100">
+                  <div className="text-5xl mb-4">✅</div>
+                  <div className={`mb-3 ${getMedicationColor(currentQuestion.medication, currentQuestion.category)}`}>
                     {getMedicationIcon(currentQuestion.medication, currentQuestion.category)}
                   </div>
-                  <div className="text-center max-w-md">
-                    <h4 className="text-lg font-semibold text-green-900 mb-3">Answer:</h4>
-                    <p className="text-2xl font-bold text-green-700 mb-4">{currentQuestion.correctAnswer}</p>
+                  <div className="text-center max-w-md px-2">
+                    <h4 className="text-base font-semibold text-green-900 mb-2">Answer:</h4>
+                    <p className="text-xl font-bold text-green-700 mb-3">{currentQuestion.correctAnswer}</p>
                     <p className="text-sm text-gray-600">{currentQuestion.explanation}</p>
                   </div>
                 </CardContent>
@@ -1836,8 +1850,9 @@ export function MedicationLearningGame() {
           </div>
         </div>
 
+        {/* Action Buttons - Mobile Optimized */}
         {isCardFlipped && !isProcessingAnswer && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 animate-fade-in">
+          <div className="grid grid-cols-2 gap-3 animate-fade-in">
             <Button
               type="button"
               onClick={(e) => {
@@ -1847,12 +1862,12 @@ export function MedicationLearningGame() {
               }}
               variant="outline"
               size="lg"
-              className="flex items-center justify-center gap-2 px-6 py-6 sm:px-8 sm:py-6 border-2 border-red-400 hover:bg-red-50 min-h-[60px]"
+              className="flex-col h-20 border-2 border-red-400 hover:bg-red-50 active:scale-95 transition-transform"
             >
-              <ArrowLeft className="h-5 w-5" />
-              <div className="text-left">
-                <div className="font-bold">Need to Study</div>
-                <div className="text-xs text-gray-500">Left Arrow</div>
+              <ArrowLeft className="h-5 w-5 mb-1" />
+              <div className="text-center">
+                <div className="font-bold text-sm">Need Study</div>
+                <div className="text-xs text-gray-500">Swipe ←</div>
               </div>
             </Button>
             <Button
@@ -1863,31 +1878,32 @@ export function MedicationLearningGame() {
                 handleAnswer(true)
               }}
               size="lg"
-              className="flex items-center justify-center gap-2 px-6 py-6 sm:px-8 sm:py-6 bg-green-600 hover:bg-green-700 min-h-[60px]"
+              className="flex-col h-20 bg-green-600 hover:bg-green-700 active:scale-95 transition-transform"
             >
-              <div className="text-right">
-                <div className="font-bold">I Knew This!</div>
-                <div className="text-xs opacity-80">Right Arrow</div>
+              <div className="text-center">
+                <div className="font-bold text-sm">I Know!</div>
+                <div className="text-xs opacity-80">Swipe →</div>
               </div>
-              <ArrowRight className="h-5 w-5" />
+              <ArrowRight className="h-5 w-5 mt-1" />
             </Button>
           </div>
         )}
 
-        <div className="flex justify-between items-center">
+        {/* Navigation - Mobile Optimized */}
+        <div className="flex justify-between items-center pt-2">
           <Button
             variant="outline"
             onClick={previousQuestion}
             disabled={questionIndex === 0}
-            className="flex items-center gap-2 bg-transparent"
+            className="h-10 px-3 bg-transparent"
           >
-            <ChevronLeft className="h-4 w-4" />
-            Previous
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            <span className="hidden xs:inline">Prev</span>
           </Button>
 
-          <div className="text-sm text-gray-600">
-            {questionIndex + 1} / {questions.length}
-          </div>
+          <span className="text-sm font-medium text-gray-600">
+            {questionIndex + 1} of {questions.length}
+          </span>
 
           <Button
             variant="outline"
@@ -1902,36 +1918,38 @@ export function MedicationLearningGame() {
                 endGame()
               }
             }}
-            className="flex items-center gap-2"
+            className="h-10 px-3"
           >
-            {questionIndex < questions.length - 1 ? "Next" : "Finish"}
-            <ChevronRight className="h-4 w-4" />
+            <span className="hidden xs:inline">{questionIndex < questions.length - 1 ? "Next" : "Finish"}</span>
+            <span className="xs:hidden">{questionIndex < questions.length - 1 ? "→" : "✓"}</span>
+            <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
         </div>
 
+        {/* Stats Card - Compact Mobile */}
         <Card className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
-          <CardContent className="p-4 sm:p-6">
-            <div className="grid grid-cols-3 gap-2 sm:gap-4 text-center">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-3 gap-3 text-center">
               <div>
-                <div className="text-3xl font-bold text-green-600 flex items-center justify-center gap-1">
+                <div className="text-2xl font-bold text-green-600 flex items-center justify-center gap-1">
                   {sessionStats.correct}
-                  <CheckCircle className="h-6 w-6" />
+                  <CheckCircle className="h-5 w-5" />
                 </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Known</div>
+                <div className="text-xs text-gray-600 dark:text-gray-400">Known</div>
               </div>
               <div>
-                <div className="text-3xl font-bold text-red-600 flex items-center justify-center gap-1">
+                <div className="text-2xl font-bold text-red-600 flex items-center justify-center gap-1">
                   {sessionStats.incorrect}
-                  <XCircle className="h-6 w-6" />
+                  <XCircle className="h-5 w-5" />
                 </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">To Study</div>
+                <div className="text-xs text-gray-600 dark:text-gray-400">Study</div>
               </div>
               <div>
-                <div className="text-3xl font-bold text-orange-600 flex items-center justify-center gap-1">
+                <div className="text-2xl font-bold text-orange-600 flex items-center justify-center gap-1">
                   {gameStats.streak}
-                  <Flame className="h-6 w-6" />
+                  <Flame className="h-5 w-5" />
                 </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Streak</div>
+                <div className="text-xs text-gray-600 dark:text-gray-400">Streak</div>
               </div>
             </div>
           </CardContent>
