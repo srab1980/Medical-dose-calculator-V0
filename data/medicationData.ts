@@ -12,12 +12,12 @@ const antibiotics: Medication[] = [
   {
     name: "Augmentin 457",
     category: "antibiotics",
-    reference: "90 mg/kg/day (3mo-12y), 30 mg/kg/day (<3mo)",
+    reference: "50-90 mg/kg/day (3mo-12y), 30 mg/kg/day (<3mo)",
   },
   {
     name: "Augmentin ES 600",
     category: "antibiotics",
-    reference: "90 mg/kg/day (3mo-12y), 30 mg/kg/day (<3mo)",
+    reference: "50-90 mg/kg/day (3mo-12y), 30 mg/kg/day (<3mo)",
   },
   {
     name: "Zinnat 125",
@@ -42,17 +42,17 @@ const antibiotics: Medication[] = [
   {
     name: "Metronidazole 125",
     category: "antibiotics",
-    reference: "50 mg/kg/day (3mo-12y)",
+    reference: "35-50 mg/kg/day (3mo-12y)",
   },
   {
     name: "Metronidazole 250",
     category: "antibiotics",
-    reference: "50 mg/kg/day (3mo-12y)",
+    reference: "35-50 mg/kg/day (3mo-12y)",
   },
   {
     name: "Zithromax",
     category: "antibiotics",
-    reference: "30 mg/kg/day (3mo-12y)",
+    reference: "10 -12 mg/kg/day (3mo-12y)",
   },
   {
     name: "Suprax 100",
@@ -62,7 +62,7 @@ const antibiotics: Medication[] = [
   {
     name: "Amoxicillin 250",
     category: "antibiotics",
-    reference: "45 mg/kg/day (3mo-12y)",
+    reference: "40-45 mg/kg/day (3mo-12y)",
   },
   {
     name: "Zovirax",
@@ -72,22 +72,22 @@ const antibiotics: Medication[] = [
   {
     name: "Septrin (SULFAMETHOXAZOLE)",
     category: "antibiotics",
-    reference: "100 mg/kg/day (3mo-12y)",
+    reference: "75-100 mg/kg/day (3mo-12y)",
   },
   {
     name: "Septrin (TRIMETHOPRIM)",
     category: "antibiotics",
-    reference: "20 mg/kg/day (3mo-12y)",
+    reference: "15-20 mg/kg/day (3mo-12y)",
   },
   {
     name: "Nystatin",
     category: "antibiotics",
-    reference: "800,000 units/day (<3mo), 2,400,000 units/day (3mo-12y)",
+    reference: "800,000 units/day (<12mo), 2,400,000 units/day (1y-12y)",
   },
   {
     name: "Nitrofurantoin",
     category: "antibiotics",
-    reference: "1 mg/kg/day (3mo-12y)",
+    reference: "5-7 mg/kg/day (3mo-12y)",
   },
 ]
 

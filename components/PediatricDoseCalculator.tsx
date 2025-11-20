@@ -11,20 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import {
-  Moon,
-  Sun,
-  Printer,
-  Search,
-  X,
-  AlertTriangle,
-  Info,
-  Calculator,
-  History,
-  BookOpen,
-  Shield,
-  TrendingUp,
-} from "lucide-react"
+import { Moon, Sun, Printer, Search, X, AlertTriangle, Info, Calculator, History, BookOpen, Shield, TrendingUp } from 'lucide-react'
 import { calculateDose } from "../utils/doseCalculator"
 import { medicationData } from "../data/medicationData"
 import { fetchDrugInfo, fetchDrugInteractions } from "../utils/openFdaApi"
@@ -735,6 +722,9 @@ export function PediatricDoseCalculator() {
                             <p>
                               <strong>Frequency:</strong> {result.frequency}
                             </p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 italic mt-2">
+                              For detailed dosage regimes according to indications see drug information below
+                            </p>
                           </div>
                           <div className="space-y-2">
                             <p>
@@ -745,11 +735,20 @@ export function PediatricDoseCalculator() {
                                 <strong>Comment:</strong> {result.comment}
                               </p>
                             )}
-                            <p>
-                              <strong>Calculated on:</strong> {new Date().toLocaleString()}
-                            </p>
                           </div>
                         </div>
+
+                        {result.maxDoseReached && (
+                          <Alert className="mt-4 border-l-4 border-l-orange-500 bg-orange-50 dark:bg-orange-900/20">
+                            <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                            <AlertTitle className="text-orange-800 dark:text-orange-300 font-semibold">
+                              Maximum Dose Applied
+                            </AlertTitle>
+                            <AlertDescription className="text-orange-700 dark:text-orange-400">
+                              {result.maxDoseReached}
+                            </AlertDescription>
+                          </Alert>
+                        )}
 
                         <a
                           href={result.url}

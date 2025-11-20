@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 
 const API_BASE_URL = "https://api.fda.gov/drug"
-const API_KEY = process.env.NEXT_PUBLIC_OPENFDA_API_KEY || ""
+const API_KEY = process.env.OPENFDA_API_KEY || ""
 
 interface DrugInfo {
   drugName: string
@@ -41,17 +41,24 @@ async function fetchWithRetry(url: string, retries = 2): Promise<Response | null
 
       if (response.ok) return response
 
-      // For 404 or 429, don't retry - just return null
-      if (response.status === 404 || response.status === 429) {
-        console.log(`API returned ${response.status} for ${url}, using fallback data`)
+      if (response.status === 404) {
+        // Don't log 404s as they're expected for many medications
         return null
       }
 
-      // For other errors, retry
-      console.warn(`Attempt ${i + 1} failed with status ${response.status}`)
+      if (response.status === 429) {
+        console.log(`API rate limit reached, will use fallback data`)
+        return null
+      }
+
+      // For other errors, log and retry
+      if (i === retries - 1) {
+        console.warn(`API request failed with status ${response.status} after ${retries} attempts`)
+      }
     } catch (error) {
-      console.warn(`Fetch attempt ${i + 1} failed:`, error)
-      // Don't throw, just continue to next retry
+      if (i === retries - 1) {
+        console.warn(`Fetch failed after ${retries} attempts, using fallback data`)
+      }
     }
 
     // Wait before retrying
@@ -60,8 +67,7 @@ async function fetchWithRetry(url: string, retries = 2): Promise<Response | null
     }
   }
 
-  // After all retries, return null instead of throwing
-  console.log(`All fetch attempts failed for ${url}, using fallback data`)
+  // After all retries, return null (fallback will be used)
   return null
 }
 
@@ -281,7 +287,7 @@ export async function GET(request: NextRequest) {
               }
             }
           } catch (jsonError) {
-            console.warn(`JSON parse error for brand search:`, jsonError)
+            // Silent fail - will use fallback
           }
         }
       }
@@ -305,7 +311,7 @@ export async function GET(request: NextRequest) {
               }
             }
           } catch (jsonError) {
-            console.warn(`JSON parse error for generic search:`, jsonError)
+            // Silent fail - will use fallback
           }
         }
       }
@@ -329,7 +335,7 @@ export async function GET(request: NextRequest) {
               }
             }
           } catch (jsonError) {
-            console.warn(`JSON parse error for substance search:`, jsonError)
+            // Silent fail - will use fallback
           }
         }
       }
@@ -359,16 +365,14 @@ export async function GET(request: NextRequest) {
             }
           }
         } catch (jsonError) {
-          console.warn(`JSON parse error for adverse events:`, jsonError)
+          // Silent fail - will use fallback
         }
       }
     }
 
-    console.log(`ℹ️ Using fallback data for: ${drugName}`)
     return NextResponse.json(fallbackInfo)
   } catch (error) {
-    // Catch any unexpected errors and return fallback
-    console.warn(`⚠️ Unexpected error, using fallback:`, error)
+    // Catch any unexpected errors and return fallback silently
     return NextResponse.json(fallbackInfo)
   }
 }

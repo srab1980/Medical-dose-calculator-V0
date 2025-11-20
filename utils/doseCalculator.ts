@@ -1,3 +1,5 @@
+import { getOverrideForMedication, getDefaultMedicationEdit } from "./adminOverrides"
+
 export function calculateDose(
   medication: string,
   weightKg: number,
@@ -10,7 +12,212 @@ export function calculateDose(
   url: string
   referenceLabel: string
   comment?: string
+  maxDoseReached?: string
 } {
+  console.log("[v0] === DOSE CALCULATION START ===")
+  console.log("[v0] Medication:", medication)
+  console.log("[v0] Weight:", weightKg, "kg")
+  console.log("[v0] Age:", ageInMonths, "months")
+
+  const override = getOverrideForMedication(medication, ageInMonths, weightKg)
+
+  console.log("[v0] Override found:", override ? "YES" : "NO")
+  if (override) {
+    console.log("[v0] Override details:", JSON.stringify(override, null, 2))
+  }
+
+  if (override) {
+    try {
+      console.log("[v0] Using override for calculation")
+      console.log("[v0] Patient weight:", weightKg)
+      console.log("[v0] Max weight limit:", override.maxWeightKg)
+      console.log("[v0] Max dose limit:", override.maxDose)
+      console.log("[v0] Max dose 2 limit:", override.maxDose2)
+
+      const dose = eval(
+        override.doseFormula.replace(/weightKg/g, String(weightKg)).replace(/ageInMonths/g, String(ageInMonths)),
+      )
+
+      console.log("[v0] Calculated dose from formula:", dose, "mg")
+
+      let finalDose = dose
+      const comment = override.comment
+      let maxDoseReached: string | undefined
+
+      if (override.maxWeightKg && weightKg > override.maxWeightKg) {
+        console.log("[v0] ⚠️ WEIGHT EXCEEDS MAX!")
+        console.log("[v0] Patient weight:", weightKg, "kg")
+        console.log("[v0] Max weight:", override.maxWeightKg, "kg")
+
+        const maxWeightDose = eval(
+          override.doseFormula
+            .replace(/weightKg/g, String(override.maxWeightKg))
+            .replace(/ageInMonths/g, String(ageInMonths)),
+        )
+
+        console.log("[v0] Dose capped to max weight dose:", maxWeightDose, "mg")
+        finalDose = maxWeightDose
+      }
+
+      if (override.maxDose) {
+        let maxDoseValue: number
+
+        if (typeof override.maxDose === "string") {
+          console.log("[v0] Evaluating maxDose formula:", override.maxDose)
+          maxDoseValue = eval(
+            override.maxDose.replace(/weightKg/g, String(weightKg)).replace(/ageInMonths/g, String(ageInMonths)),
+          )
+        } else {
+          maxDoseValue = override.maxDose
+        }
+
+        console.log("[v0] Checking primary max dose")
+        console.log("[v0] Current dose:", finalDose, "mg")
+        console.log("[v0] Max allowed:", maxDoseValue, "mg")
+
+        if (finalDose > maxDoseValue) {
+          console.log("[v0] ⚠️ PRIMARY DOSE EXCEEDS MAX!")
+          const originalDose = finalDose
+          finalDose = maxDoseValue
+
+          if (override.maxWeightKg && weightKg > override.maxWeightKg) {
+            maxDoseReached = `Maximum weight and dose limits exceeded: Patient weight (${weightKg} kg) exceeds maximum pediatric weight limit (${override.maxWeightKg} kg). Calculated dose at ${override.maxWeightKg} kg was ${Math.round(originalDose)} mg/day, but has been further capped at the maximum safe dose of ${maxDoseValue} mg/day. Consider following adult dosing regimen for patients over ${override.maxWeightKg} kg.`
+          } else {
+            maxDoseReached = `Maximum dose limit reached: Calculated dose was ${Math.round(dose)} mg, but it has been capped at the maximum safe dose of ${maxDoseValue} mg/day for this medication.`
+          }
+        } else if (override.maxWeightKg && weightKg > override.maxWeightKg) {
+          maxDoseReached = `Maximum weight limit exceeded: Patient weight (${weightKg} kg) exceeds maximum pediatric weight limit (${override.maxWeightKg} kg). Current calculation shows maximum safe pediatric dose: ${Math.round(finalDose)} mg/day (calculated at ${override.maxWeightKg} kg). Consider following adult dosing regimen for patients over ${override.maxWeightKg} kg.`
+        }
+      } else if (override.maxWeightKg && weightKg > override.maxWeightKg) {
+        maxDoseReached = `Maximum weight limit exceeded: Patient weight (${weightKg} kg) exceeds maximum pediatric weight limit (${override.maxWeightKg} kg). Current calculation shows maximum safe pediatric dose: ${Math.round(finalDose)} mg/day (calculated at ${override.maxWeightKg} kg). Consider following adult dosing regimen for patients over ${override.maxWeightKg} kg.`
+      }
+
+      let doseMl = 0
+      if (override.doseMl && override.doseMl.trim() !== "") {
+        const cleanFormula = override.doseMl.trim()
+
+        const isPlaceholder =
+          cleanFormula.includes("Formula") ||
+          cleanFormula.includes("formula") ||
+          cleanFormula.includes("optional") ||
+          cleanFormula.includes("Concentration") ||
+          cleanFormula.includes("leave empty")
+
+        if (!isPlaceholder) {
+          try {
+            if (cleanFormula.toLowerCase().includes("dose") || !isNaN(Number(cleanFormula))) {
+              const mlFormula = cleanFormula.replace(/dose/gi, String(finalDose))
+              doseMl = eval(
+                mlFormula.replace(/weightKg/g, String(weightKg)).replace(/ageInMonths/g, String(ageInMonths)),
+              )
+            }
+          } catch (mlError) {
+            console.error("[v0] Error evaluating mL formula:", mlError)
+          }
+        }
+      }
+
+      if (doseMl === 0 && override.concentrationMg && override.concentrationMl) {
+        let dosesPerDay = 1
+        const freqLower = override.frequency.toLowerCase()
+        if (freqLower.includes("12 hours") || freqLower.includes("twice")) {
+          dosesPerDay = 2
+        } else if (freqLower.includes("8 hours")) {
+          dosesPerDay = 3
+        } else if (freqLower.includes("6 hours")) {
+          dosesPerDay = 4
+        } else if (freqLower.includes("4 hours")) {
+          dosesPerDay = 6
+        } else if (freqLower.includes("5 times")) {
+          dosesPerDay = 5
+        }
+
+        doseMl = (finalDose * override.concentrationMl) / override.concentrationMg / dosesPerDay
+        console.log("[v0] Auto-calculated doseMl:", doseMl, "mL (", dosesPerDay, "doses/day)")
+      }
+
+      if (
+        !maxDoseReached &&
+        override.medication2 &&
+        override.maxDose2 &&
+        override.concentrationMg2 &&
+        override.concentrationMl2
+      ) {
+        let dosesPerDay = 1
+        const freqLower = override.frequency.toLowerCase()
+        if (freqLower.includes("12 hours") || freqLower.includes("twice")) {
+          dosesPerDay = 2
+        } else if (freqLower.includes("8 hours")) {
+          dosesPerDay = 3
+        } else if (freqLower.includes("6 hours")) {
+          dosesPerDay = 4
+        } else if (freqLower.includes("4 hours")) {
+          dosesPerDay = 6
+        } else if (freqLower.includes("5 times")) {
+          dosesPerDay = 5
+        }
+
+        // Calculate the secondary medication content from the mL dose
+        const secondaryContent = (doseMl * dosesPerDay * override.concentrationMg2) / override.concentrationMl2
+
+        // Evaluate maxDose2 formula if it's a string (e.g., "10 * weightKg")
+        let maxDose2Value: number
+
+        if (typeof override.maxDose2 === "string") {
+          console.log("[v0] Evaluating maxDose2 formula:", override.maxDose2)
+          maxDose2Value = eval(
+            override.maxDose2.replace(/weightKg/g, String(weightKg)).replace(/ageInMonths/g, String(ageInMonths)),
+          )
+        } else {
+          maxDose2Value = override.maxDose2
+        }
+
+        console.log("[v0] Checking secondary medication (", override.medication2, ")")
+        console.log("[v0] Secondary content:", secondaryContent, "mg/day")
+        console.log("[v0] Max allowed:", maxDose2Value, "mg/day")
+
+        if (secondaryContent > maxDose2Value) {
+          console.log("[v0] ⚠️ SECONDARY MEDICATION EXCEEDS MAX!")
+
+          // Cap the mL dose based on secondary medication limit
+          const maxMlPerDose = (maxDose2Value * override.concentrationMl2) / (override.concentrationMg2 * dosesPerDay)
+          doseMl = maxMlPerDose
+
+          console.log("[v0] Capping mL dose to:", doseMl, "mL per dose")
+
+          // Recalculate primary dose based on capped mL
+          if (override.concentrationMg && override.concentrationMl) {
+            finalDose = (doseMl * dosesPerDay * override.concentrationMg) / override.concentrationMl
+            console.log("[v0] Primary dose adjusted to:", finalDose, "mg/day")
+          }
+
+          maxDoseReached = `Maximum dose limit reached for ${override.medication2}: Calculated content was ${Math.round(secondaryContent)} mg/day, but it has been capped at the maximum safe dose of ${maxDose2Value} mg/day. Primary medication (${medication}) dose adjusted accordingly to ${Math.round(finalDose)} mg/day.`
+        }
+      }
+
+      console.log("[v0] === FINAL RESULTS ===")
+      console.log("[v0] Final dose:", finalDose, "mg")
+      console.log("[v0] Final doseMl:", doseMl, "mL")
+      console.log("[v0] Max dose alert:", maxDoseReached || "NONE")
+      console.log("[v0] === DOSE CALCULATION END ===")
+
+      return {
+        dose: Number(finalDose.toFixed(1)),
+        doseMl: Number(doseMl.toFixed(2)),
+        frequency: override.frequency,
+        reference: override.reference,
+        url: override.referenceUrl || "",
+        referenceLabel: override.referenceUrl ? `DailyMed - ${override.medication} Reference` : "Custom Admin Setting",
+        comment,
+        maxDoseReached,
+      }
+    } catch (error) {
+      console.error("[v0] Error evaluating admin override formula:", error)
+    }
+  }
+
+  const defaultEdit = getDefaultMedicationEdit(medication)
+
   let dose = 0
   let doseMl = 0
   let frequency = ""
@@ -18,6 +225,80 @@ export function calculateDose(
   let url = ""
   let referenceLabel = ""
   let comment: string | undefined
+  let maxDose: number | undefined
+  let maxDoseReached: string | undefined
+
+  if (defaultEdit) {
+    try {
+      // Find matching age range if exists
+      let formulaToUse = defaultEdit.defaultFormula
+      if (defaultEdit.ageRanges) {
+        const matchingRange = defaultEdit.ageRanges.find(
+          (range) => ageInMonths >= range.min && ageInMonths <= range.max,
+        )
+        if (matchingRange) {
+          formulaToUse = matchingRange.formula
+        }
+      }
+
+      dose = eval(formulaToUse.replace(/weightKg/g, String(weightKg)).replace(/ageInMonths/g, String(ageInMonths)))
+      frequency = defaultEdit.frequency
+      reference = defaultEdit.reference
+      url = defaultEdit.referenceUrl
+      referenceLabel = `DailyMed - ${medication} Reference`
+      comment = defaultEdit.comment
+      maxDose = defaultEdit.maxDose
+
+      // Calculate mL dose based on concentration
+      if (defaultEdit.concentrationMg && defaultEdit.concentrationMl) {
+        let dosesPerDay = 1
+        const freqLower = frequency.toLowerCase()
+        if (freqLower.includes("12 hours") || freqLower.includes("twice")) {
+          dosesPerDay = 2
+        } else if (freqLower.includes("8 hours")) {
+          dosesPerDay = 3
+        } else if (freqLower.includes("6 hours")) {
+          dosesPerDay = 4
+        } else if (freqLower.includes("4 hours")) {
+          dosesPerDay = 6
+        } else if (freqLower.includes("5 times")) {
+          dosesPerDay = 5
+        }
+
+        doseMl = (dose * defaultEdit.concentrationMl) / defaultEdit.concentrationMg / dosesPerDay
+      }
+
+      // Check max dose
+      if (maxDose && dose > maxDose) {
+        const originalDose = dose
+        dose = maxDose
+        doseMl =
+          (dose * (defaultEdit.concentrationMl || 5)) /
+          (defaultEdit.concentrationMg || 400) /
+          (frequency.includes("12 hours")
+            ? 2
+            : frequency.includes("8 hours")
+              ? 3
+              : frequency.includes("6 hours")
+                ? 4
+                : 1)
+        maxDoseReached = `Maximum weight limit exceeded: Patient weight (${weightKg} kg) exceeds maximum pediatric weight limit (${override.maxWeightKg} kg). Current calculation shows maximum safe pediatric dose: ${Math.round(dose)} mg/day (calculated at ${override.maxWeightKg} kg). Consider following adult dosing regimen for patients over ${override.maxWeightKg} kg.`
+      }
+
+      return {
+        dose: Number(dose.toFixed(1)),
+        doseMl: Number(doseMl.toFixed(2)),
+        frequency,
+        reference,
+        url,
+        referenceLabel,
+        comment,
+        maxDoseReached,
+      }
+    } catch (error) {
+      console.error("Error using edited default medication:", error)
+    }
+  }
 
   switch (medication) {
     // Antibiotics
@@ -40,10 +321,7 @@ export function calculateDose(
     case "Zinnat 250":
       if (ageInMonths >= 3 && ageInMonths < 144) {
         dose = 30 * weightKg
-        if (dose > 1000) {
-          dose = 1000
-          comment = "Maximum daily dose is 1000 mg"
-        }
+        maxDose = 1000 // Set max dose
         reference = "30 mg/kg/day"
         doseMl = Number(((dose * 5) / (medication === "Zinnat 125" ? 125 : 250) / 2).toFixed(1))
       }
@@ -78,10 +356,11 @@ export function calculateDose(
 
     case "Zithromax":
       if (ageInMonths >= 3 && ageInMonths < 144) {
-        dose = 30 * weightKg
+        dose = 12 * weightKg // Updated to 12 mg/kg as per user's example
+        maxDose = 500 // Set max dose to 500mg
         doseMl = Number(((dose * 5) / 200).toFixed(1))
         frequency = "Once daily"
-        reference = "30 mg/kg/day"
+        reference = "10-12 mg/kg/day (3mo-12y)"
       }
       url = "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=071e71b8-bb53-4075-9bda-2ec48affa018"
       referenceLabel = "Dailymed - Zithromax Reference"
@@ -172,8 +451,9 @@ export function calculateDose(
         reference = "1 mg/kg/day (3mo-12y)"
         comment = "For UTI prophylaxis - take with food"
       }
-      url = "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=e6c9f8b8-2f84-4742-94e6-77b1e0b24a6f"
-      referenceLabel = "Dailymed - Nitrofurantoin Reference"
+      url =
+        "https://online.lexi.com/lco/action/doc/retrieve/docid/pdh_f/129791?cesid=9zMcYVtKhP7&searchUrl=%2Flco%2Faction%2Fsearch%3Fq%3Dacetaminophen%26t%3Dname%26acs%3Dtrue%26acq%3Daceta#don"
+      referenceLabel = `LEXICOMP - ${medication}`
       break
 
     // Other Medications
@@ -213,7 +493,7 @@ export function calculateDose(
         dose = 500
         doseMl = 5
         frequency = "Every 4-6 hours as needed"
-        reference = "Adult dose: 500-1000 mg every 4-6 hours"
+        reference = "Adult dose: 200-400 mg every 4-6 hours"
       }
       url = "https://online.lexi.com/lco/action/doc/retrieve/docid/pdh_f/129791"
       referenceLabel = "LEXICOMP - ADOL DROPS"
@@ -225,7 +505,7 @@ export function calculateDose(
         doseMl = Number(((dose * 5) / 100).toFixed(1))
         frequency = "Every 6-8 hours as needed"
         reference = "5-10 mg/kg/dose"
-        if (dose * 4 > 40 * weightKg) {
+        if (doseMl * 4 > 40 * weightKg) {
           comment = "Maximum daily dose: 40 mg/kg/day"
         }
       } else if (weightKg > 40 || ageInMonths >= 144) {
@@ -351,5 +631,16 @@ export function calculateDose(
       throw new Error("Medication not found")
   }
 
-  return { dose, doseMl, frequency, reference, url, referenceLabel, comment }
+  // No need to repeat the maxWeightKg check here as it's already handled in the override section
+
+  return {
+    dose: Number(dose.toFixed(1)),
+    doseMl: Number(doseMl.toFixed(2)),
+    frequency,
+    reference,
+    url,
+    referenceLabel,
+    comment,
+    maxDoseReached,
+  }
 }

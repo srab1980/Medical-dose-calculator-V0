@@ -295,6 +295,12 @@ export async function fetchDrugInfo(drugName: string): Promise<DrugInfo> {
       },
     })
 
+    if (!response.ok) {
+      console.warn(`API returned status ${response.status}, using enhanced fallback data`)
+      cache[cacheKey] = { data: enhancedInfo, timestamp: Date.now() }
+      return enhancedInfo
+    }
+
     // Check if the response is actually JSON
     const contentType = response.headers.get("content-type")
     if (!contentType || !contentType.includes("application/json")) {
@@ -303,14 +309,13 @@ export async function fetchDrugInfo(drugName: string): Promise<DrugInfo> {
       return enhancedInfo
     }
 
-    // Always try to parse the response, even if not ok
     const text = await response.text()
 
     let apiDrugInfo
     try {
       apiDrugInfo = JSON.parse(text)
     } catch (parseError) {
-      console.warn("Failed to parse JSON response:", parseError)
+      console.warn("Failed to parse JSON response, using fallback:", parseError)
       cache[cacheKey] = { data: enhancedInfo, timestamp: Date.now() }
       return enhancedInfo
     }
