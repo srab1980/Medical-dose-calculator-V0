@@ -41,13 +41,17 @@ export interface DefaultMedicationEdit {
   }>
 }
 
+import { DEFAULT_OVERRIDES } from "./defaultOverrides"
+
 export function getAdminOverrides(): MedicationOverride[] {
-  if (typeof window === "undefined") return []
+  if (typeof window === "undefined") return [...DEFAULT_OVERRIDES]
   try {
     const overrides = localStorage.getItem("admin_medication_overrides")
-    return overrides ? JSON.parse(overrides) : []
+    const localOverrides = overrides ? JSON.parse(overrides) : []
+    // localStorage overrides take precedence
+    return [...DEFAULT_OVERRIDES, ...localOverrides]
   } catch {
-    return []
+    return [...DEFAULT_OVERRIDES]
   }
 }
 
@@ -171,4 +175,10 @@ export function saveDefaultMedicationEdits(edits: DefaultMedicationEdit[]): void
 export function getDefaultMedicationEdit(medicationName: string): DefaultMedicationEdit | null {
   const edits = getDefaultMedicationEdits()
   return edits.find((edit) => edit.name === medicationName) || null
+}
+
+export function exportOverridesToCode(): string {
+  const overrides = getAdminOverrides()
+  return `// Default medication overrides
+export const DEFAULT_OVERRIDES: MedicationOverride[] = ${JSON.stringify(overrides, null, 2)}`
 }

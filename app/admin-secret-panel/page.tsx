@@ -13,6 +13,7 @@ import {
   getDefaultMedicationEdits,
   saveDefaultMedicationEdits,
   type DefaultMedicationEdit,
+  exportOverridesToCode,
 } from "@/utils/adminOverrides"
 import { Trash2, Plus, RefreshCw, Search, Edit2, Save, X } from "lucide-react"
 
@@ -368,6 +369,30 @@ export default function AdminPanel() {
       setOverrides([])
       setEditingIndex(null)
       handleCancelEdit()
+    }
+  }
+
+  const handleExportOverrides = () => {
+    const code = exportOverridesToCode()
+    const blob = new Blob([code], { type: "text/typescript" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "defaultOverrides.ts"
+    a.click()
+    URL.revokeObjectURL(url)
+    alert(
+      "Overrides exported! Replace the contents of utils/defaultOverrides.ts with this file to make these overrides permanent.",
+    )
+  }
+
+  const handleCopyOverrides = async () => {
+    const code = exportOverridesToCode()
+    try {
+      await navigator.clipboard.writeText(code)
+      alert("Overrides copied to clipboard! Paste into utils/defaultOverrides.ts")
+    } catch (err) {
+      alert("Failed to copy to clipboard. Please use the Download button instead.")
     }
   }
 
@@ -883,7 +908,7 @@ export default function AdminPanel() {
 
             <Card className="bg-gray-800 border-green-500">
               <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
+                <CardTitle className="text-white">
                   <Plus className="w-5 h-5" />
                   {editingIndex !== null ? "Edit Override" : "Add New Override"}
                 </CardTitle>
@@ -1266,12 +1291,34 @@ export default function AdminPanel() {
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle className="text-white">Active Overrides ({overrides.length})</CardTitle>
-                  {overrides.length > 0 && (
-                    <Button onClick={handleClearAll} variant="destructive" size="sm">
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      Clear All
-                    </Button>
-                  )}
+                  <div className="flex gap-2">
+                    {overrides.length > 0 && (
+                      <>
+                        <Button
+                          onClick={handleCopyOverrides}
+                          variant="outline"
+                          size="sm"
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                          📋 Copy Code
+                        </Button>
+                        <Button
+                          onClick={handleExportOverrides}
+                          variant="outline"
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          💾 Download
+                        </Button>
+                      </>
+                    )}
+                    {overrides.length > 0 && (
+                      <Button onClick={handleClearAll} variant="destructive" size="sm">
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Clear All
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -1664,6 +1711,18 @@ export default function AdminPanel() {
               <strong className="text-white">Reference Summary Editor Tab:</strong> Edit default medication values
               directly with inline editing
             </p>
+            <p className="pt-2 border-t border-gray-600">
+              <strong className="text-green-400">Making Overrides Permanent:</strong>
+            </p>
+            <ol className="list-decimal list-inside space-y-1 pl-2">
+              <li>Configure your medication overrides in this admin panel</li>
+              <li>Click "Copy Code" or "Download" button above the Active Overrides section</li>
+              <li>
+                Replace the contents of <code className="bg-gray-700 px-1 rounded">utils/defaultOverrides.ts</code> with
+                the exported code
+              </li>
+              <li>Commit and push to GitHub - your overrides will now be deployed with your app!</li>
+            </ol>
             <p className="text-yellow-400 pt-2">
               ⚠️ Keep this URL private: <code className="bg-gray-700 px-2 py-1 rounded">/admin-secret-panel</code>
             </p>
