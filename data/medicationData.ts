@@ -96,17 +96,17 @@ const other: Medication[] = [
   {
     name: "PANADOL BABY and INFANT 120 MG/5ML",
     category: "other",
-    reference: "75 mg/kg/day, max 4000 mg/day",
+    reference: "60 mg/kg/day, max 4000 mg/day",
   },
   {
     name: "PANADOL Elixir 240 MG/5ML",
     category: "other",
-    reference: "75 mg/kg/day, max 4000 mg/day",
+    reference: "60 mg/kg/day, max 4000 mg/day",
   },
   {
     name: "ADOL DROPS 100 MG/ML",
     category: "other",
-    reference: "10-15 mg/kg/dose, max 60 mg/kg/day",
+    reference: "10-15 mg/kg/dose, , max 40 mg/kg/day (<2m), max 60 mg/kg/day (>2m)",
   },
   {
     name: "BRUFEN PAEDIATRIC SYRUP 100 MG/5 ML",

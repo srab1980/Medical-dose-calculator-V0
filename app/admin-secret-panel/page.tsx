@@ -15,12 +15,14 @@ import {
   type DefaultMedicationEdit,
   exportOverridesToCode,
 } from "@/utils/adminOverrides"
+import { getCustomMedications, saveCustomMedications, type CustomMedication } from "@/utils/customMedications"
 import { Trash2, Plus, RefreshCw, Search, Edit2, Save, X } from "lucide-react"
 
 export default function AdminPanel() {
-  const [activeTab, setActiveTab] = useState<"overrides" | "reference">("overrides")
+  const [activeTab, setActiveTab] = useState<"overrides" | "reference" | "customMedications">("overrides")
   const [overrides, setOverrides] = useState<MedicationOverride[]>([])
   const [defaultEdits, setDefaultEdits] = useState<DefaultMedicationEdit[]>([])
+  const [customMedications, setCustomMedications] = useState<CustomMedication[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [editingDefaultName, setEditingDefaultName] = useState<string | null>(null)
@@ -38,7 +40,7 @@ export default function AdminPanel() {
     minAgeMonths: undefined,
     maxAgeMonths: undefined,
     ageLabel: "",
-    minWeightKg: undefined, // Added weight range fields
+    minWeightKg: undefined,
     maxWeightKg: undefined,
     weightLabel: "",
     doseMl: "",
@@ -51,9 +53,23 @@ export default function AdminPanel() {
     maxDose2: undefined,
   })
 
+  const [newCustomMed, setNewCustomMed] = useState<CustomMedication>({
+    name: "",
+    category: "antibiotics",
+    defaultFormula: "",
+    frequency: "",
+    reference: "",
+    referenceUrl: "",
+    maxDose: undefined,
+    comment: "",
+    concentrationMg: undefined,
+    concentrationMl: undefined,
+  })
+
   useEffect(() => {
     setOverrides(getAdminOverrides())
     setDefaultEdits(getDefaultMedicationEdits())
+    setCustomMedications(getCustomMedications())
   }, [])
 
   const generateReferenceFromFormula = (formula: string): string => {
@@ -205,10 +221,42 @@ export default function AdminPanel() {
     })
   }
 
+  const handleAddCustomMedication = () => {
+    if (!newCustomMed.name || !newCustomMed.defaultFormula) {
+      alert("Please fill in medication name and dose formula")
+      return
+    }
+
+    const updated = [...customMedications, { ...newCustomMed }]
+    setCustomMedications(updated)
+    saveCustomMedications(updated)
+
+    // Reset form
+    setNewCustomMed({
+      name: "",
+      category: "antibiotics",
+      defaultFormula: "",
+      frequency: "",
+      reference: "",
+      referenceUrl: "",
+      maxDose: undefined,
+      comment: "",
+      concentrationMg: undefined,
+      concentrationMl: undefined,
+    })
+  }
+
   const handleEditOverride = (index: number) => {
     setNewOverride({ ...overrides[index] })
     setEditingIndex(index)
     setEditingDefaultName(null) // Ensure default editing is off
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  const handleDuplicateOverride = (index: number) => {
+    setNewOverride({ ...overrides[index] })
+    setEditingIndex(null) // Not editing - creating new
+    setEditingDefaultName(null)
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
@@ -351,6 +399,12 @@ export default function AdminPanel() {
       setEditingIndex(null)
       handleCancelEdit()
     }
+  }
+
+  const handleRemoveCustomMedication = (index: number) => {
+    const updated = customMedications.filter((_, i) => i !== index)
+    setCustomMedications(updated)
+    saveCustomMedications(updated)
   }
 
   const handleRemoveDefaultEdit = (medicationName: string) => {
@@ -834,6 +888,12 @@ export default function AdminPanel() {
           >
             Reference Summary Editor
           </Button>
+          <Button
+            onClick={() => setActiveTab("customMedications")}
+            className={`flex-1 ${activeTab === "customMedications" ? "bg-purple-600 hover:bg-purple-700" : "bg-gray-700 hover:bg-gray-600"}`}
+          >
+            Add New Medication
+          </Button>
         </div>
 
         {activeTab === "overrides" ? (
@@ -913,9 +973,8 @@ export default function AdminPanel() {
                   {editingIndex !== null ? "Edit Override" : "Add New Override"}
                 </CardTitle>
                 <CardDescription className="text-gray-300">
-                  {editingIndex !== null
-                    ? "Update the override or click Cancel to discard changes"
-                    : "Click a medication above to populate the form, then modify as needed. Add age or weight ranges for specific dosing scenarios."}
+                  Click a medication above to populate the form, then modify as needed. Add age or weight ranges for
+                  specific dosing scenarios.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1148,14 +1207,14 @@ export default function AdminPanel() {
                     </Label>
                     <Input
                       id="maxDose"
-                      type="number"
                       value={newOverride.maxDose || ""}
-                      onChange={(e) =>
-                        setNewOverride({ ...newOverride, maxDose: e.target.value ? Number(e.target.value) : undefined })
-                      }
-                      placeholder="e.g., 1000"
-                      className="bg-gray-700 text-white border-gray-600"
+                      onChange={(e) => setNewOverride({ ...newOverride, maxDose: e.target.value })}
+                      placeholder="e.g., 1000 or 40 * weightKg"
+                      className="bg-gray-700 text-white border-gray-600 font-mono"
                     />
+                    <p className="text-xs text-gray-400">
+                      Supports numbers or weight-based formulas like "40 * weightKg". Dose will not exceed this value.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="comment" className="text-white">
@@ -1363,6 +1422,15 @@ export default function AdminPanel() {
                           </div>
                           <div className="flex gap-2">
                             <Button
+                              onClick={() => handleDuplicateOverride(index)}
+                              variant="ghost"
+                              size="sm"
+                              className="text-purple-400 hover:text-purple-300 hover:bg-purple-900/20"
+                              title="Duplicate this override to create a new dosing regime"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </Button>
+                            <Button
                               onClick={() => handleEditOverride(index)}
                               variant="ghost"
                               size="sm"
@@ -1469,8 +1537,9 @@ export default function AdminPanel() {
               </CardContent>
             </Card>
           </>
-        ) : (
+        ) : activeTab === "reference" ? (
           <>
+            {/* ... existing reference tab code ... */}
             <Card className="bg-gray-800 border-green-500">
               <CardHeader>
                 <CardTitle className="text-white">Reference Summary - Direct Editor</CardTitle>
@@ -1695,6 +1764,254 @@ export default function AdminPanel() {
               </CardContent>
             </Card>
           </>
+        ) : (
+          <>
+            <Card className="bg-gray-800 border-purple-500">
+              <CardHeader>
+                <CardTitle className="text-white">Add New Medication</CardTitle>
+                <CardDescription className="text-gray-300">
+                  Create a new medication that will appear in the calculator. Specify which tab it should appear in.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="customMedName" className="text-white">
+                      Medication Name *
+                    </Label>
+                    <Input
+                      id="customMedName"
+                      value={newCustomMed.name}
+                      onChange={(e) => setNewCustomMed({ ...newCustomMed, name: e.target.value })}
+                      placeholder="e.g., New Antibiotic 250"
+                      className="bg-gray-700 text-white border-gray-600"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="customCategory" className="text-white">
+                      Category *
+                    </Label>
+                    <select
+                      id="customCategory"
+                      value={newCustomMed.category}
+                      onChange={(e) =>
+                        setNewCustomMed({ ...newCustomMed, category: e.target.value as "antibiotics" | "other" })
+                      }
+                      className="w-full bg-gray-700 text-white border-gray-600 rounded p-2"
+                    >
+                      <option value="antibiotics">Antibiotics</option>
+                      <option value="other">Other Medications</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="customFormula" className="text-white">
+                      Dose Formula *
+                    </Label>
+                    <Input
+                      id="customFormula"
+                      value={newCustomMed.defaultFormula}
+                      onChange={(e) => setNewCustomMed({ ...newCustomMed, defaultFormula: e.target.value })}
+                      placeholder="e.g., 20 * weightKg"
+                      className="bg-gray-700 text-white border-gray-600 font-mono"
+                    />
+                    <p className="text-xs text-gray-400">Use "weightKg" for weight in kg, "ageInMonths" for age</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="customFrequency" className="text-white">
+                      Frequency *
+                    </Label>
+                    <Input
+                      id="customFrequency"
+                      value={newCustomMed.frequency}
+                      onChange={(e) => setNewCustomMed({ ...newCustomMed, frequency: e.target.value })}
+                      placeholder="e.g., Every 12 hours"
+                      className="bg-gray-700 text-white border-gray-600"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="customConcentrationMg" className="text-white">
+                        Concentration (mg)
+                      </Label>
+                      <Input
+                        id="customConcentrationMg"
+                        type="number"
+                        value={newCustomMed.concentrationMg || ""}
+                        onChange={(e) =>
+                          setNewCustomMed({
+                            ...newCustomMed,
+                            concentrationMg: e.target.value ? Number(e.target.value) : undefined,
+                          })
+                        }
+                        placeholder="e.g., 250"
+                        className="bg-gray-700 text-white border-gray-600"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="customConcentrationMl" className="text-white">
+                        Concentration (mL)
+                      </Label>
+                      <Input
+                        id="customConcentrationMl"
+                        type="number"
+                        value={newCustomMed.concentrationMl || ""}
+                        onChange={(e) =>
+                          setNewCustomMed({
+                            ...newCustomMed,
+                            concentrationMl: e.target.value ? Number(e.target.value) : undefined,
+                          })
+                        }
+                        placeholder="e.g., 5"
+                        className="bg-gray-700 text-white border-gray-600"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="customReference" className="text-white">
+                      Reference
+                    </Label>
+                    <Input
+                      id="customReference"
+                      value={newCustomMed.reference}
+                      onChange={(e) => setNewCustomMed({ ...newCustomMed, reference: e.target.value })}
+                      placeholder="e.g., 20 mg/kg/day"
+                      className="bg-gray-700 text-white border-gray-600"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="customReferenceUrl" className="text-white">
+                      Reference URL
+                    </Label>
+                    <Input
+                      id="customReferenceUrl"
+                      value={newCustomMed.referenceUrl || ""}
+                      onChange={(e) => setNewCustomMed({ ...newCustomMed, referenceUrl: e.target.value })}
+                      placeholder="e.g., https://dailymed.nlm.nih.gov/..."
+                      className="bg-gray-700 text-white border-gray-600"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="customMaxDose" className="text-white">
+                      Max Dose (optional)
+                    </Label>
+                    <Input
+                      id="customMaxDose"
+                      type="number"
+                      value={newCustomMed.maxDose || ""}
+                      onChange={(e) =>
+                        setNewCustomMed({
+                          ...newCustomMed,
+                          maxDose: e.target.value ? Number(e.target.value) : undefined,
+                        })
+                      }
+                      placeholder="e.g., 1000"
+                      className="bg-gray-700 text-white border-gray-600"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="customComment" className="text-white">
+                      Comment (optional)
+                    </Label>
+                    <Input
+                      id="customComment"
+                      value={newCustomMed.comment || ""}
+                      onChange={(e) => setNewCustomMed({ ...newCustomMed, comment: e.target.value })}
+                      placeholder="e.g., Take with food"
+                      className="bg-gray-700 text-white border-gray-600"
+                    />
+                  </div>
+                </div>
+
+                <Button onClick={handleAddCustomMedication} className="w-full bg-purple-600 hover:bg-purple-700">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Custom Medication
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gray-800 border-yellow-500">
+              <CardHeader>
+                <CardTitle className="text-white">Custom Medications ({customMedications.length})</CardTitle>
+                <CardDescription className="text-gray-300">
+                  Medications you've added will appear in the calculator
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {customMedications.length === 0 ? (
+                  <p className="text-gray-400 text-center py-8">
+                    No custom medications yet. Add one using the form above.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {customMedications.map((med, index) => (
+                      <div key={index} className="bg-gray-700 p-4 rounded-lg border border-gray-600">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <h3 className="text-lg font-semibold text-white">{med.name}</h3>
+                            <div className="text-xs text-purple-300 mt-1">
+                              Category: {med.category === "antibiotics" ? "Antibiotics" : "Other Medications"}
+                            </div>
+                          </div>
+                          <Button
+                            onClick={() => handleRemoveCustomMedication(index)}
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <span className="text-gray-400">Formula:</span>
+                            <span className="text-green-300 ml-2 font-mono">{med.defaultFormula}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Frequency:</span>
+                            <span className="text-blue-300 ml-2">{med.frequency}</span>
+                          </div>
+                          {med.reference && (
+                            <div>
+                              <span className="text-gray-400">Reference:</span>
+                              <span className="text-purple-300 ml-2">{med.reference}</span>
+                            </div>
+                          )}
+                          {med.concentrationMg && med.concentrationMl && (
+                            <div>
+                              <span className="text-gray-400">Concentration:</span>
+                              <span className="text-cyan-300 ml-2">
+                                {med.concentrationMg} mg / {med.concentrationMl} mL
+                              </span>
+                            </div>
+                          )}
+                          {med.maxDose && (
+                            <div>
+                              <span className="text-gray-400">Max Dose:</span>
+                              <span className="text-yellow-300 ml-2">{med.maxDose} mg</span>
+                            </div>
+                          )}
+                          {med.comment && (
+                            <div className="md:col-span-2">
+                              <span className="text-gray-400">Comment:</span>
+                              <span className="text-gray-300 ml-2">{med.comment}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
         )}
 
         {/* Instructions */}
@@ -1710,6 +2027,11 @@ export default function AdminPanel() {
             <p>
               <strong className="text-white">Reference Summary Editor Tab:</strong> Edit default medication values
               directly with inline editing
+            </p>
+            {/* Added instructions for custom medications tab */}
+            <p>
+              <strong className="text-white">Add New Medication Tab:</strong> Create new medications to be included in
+              the calculator's dropdowns and calculations.
             </p>
             <p className="pt-2 border-t border-gray-600">
               <strong className="text-green-400">Making Overrides Permanent:</strong>

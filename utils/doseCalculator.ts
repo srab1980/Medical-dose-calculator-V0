@@ -201,18 +201,33 @@ export function calculateDose(
       console.log("[v0] Max dose alert:", maxDoseReached || "NONE")
       console.log("[v0] === DOSE CALCULATION END ===")
 
+      const url = override.referenceUrl || ""
+      let referenceLabel = "Reference"
+
+      if (override.referenceUrl) {
+        if (override.referenceUrl.includes("dailymed")) {
+          referenceLabel = "DailyMed - " + override.medication
+        } else if (override.referenceUrl.includes("lexi.com")) {
+          referenceLabel = "LEXICOMP - " + override.medication
+        } else if (override.referenceUrl.includes("drugs.com")) {
+          referenceLabel = "Drugs.com - " + override.medication
+        } else {
+          referenceLabel = "Reference - " + override.medication
+        }
+      }
+
       return {
-        dose: Number(finalDose.toFixed(1)),
-        doseMl: Number(doseMl.toFixed(2)),
+        dose: Math.round(finalDose * 10) / 10,
+        doseMl: Math.round(doseMl * 100) / 100,
         frequency: override.frequency,
-        reference: override.reference,
-        url: override.referenceUrl || "",
-        referenceLabel: override.referenceUrl ? `DailyMed - ${override.medication} Reference` : "Custom Admin Setting",
+        reference: override.reference || "",
+        url,
+        referenceLabel,
         comment,
         maxDoseReached,
       }
     } catch (error) {
-      console.error("[v0] Error evaluating admin override formula:", error)
+      console.error("Error evaluating override formula:", error)
     }
   }
 
@@ -453,7 +468,7 @@ export function calculateDose(
       }
       url =
         "https://online.lexi.com/lco/action/doc/retrieve/docid/pdh_f/129791?cesid=9zMcYVtKhP7&searchUrl=%2Flco%2Faction%2Fsearch%3Fq%3Dacetaminophen%26t%3Dname%26acs%3Dtrue%26acq%3Daceta#don"
-      referenceLabel = `LEXICOMP - ${medication}`
+      referenceLabel = "LEXICOMP - Nitrofurantoin"
       break
 
     // Other Medications
@@ -476,7 +491,7 @@ export function calculateDose(
       }
       url =
         "https://online.lexi.com/lco/action/doc/retrieve/docid/pdh_f/129791?cesid=9zMcYVtKhP7&searchUrl=%2Flco%2Faction%2Fsearch%3Fq%3Dacetaminophen%26t%3Dname%26acs%3Dtrue%26acq%3Daceta#don"
-      referenceLabel = `LEXICOMP - ${medication}`
+      referenceLabel = "LEXICOMP - PANADOL BABY and INFANT"
       break
 
     case "ADOL DROPS 100 MG/ML":
@@ -495,7 +510,7 @@ export function calculateDose(
         frequency = "Every 4-6 hours as needed"
         reference = "Adult dose: 200-400 mg every 4-6 hours"
       }
-      url = "https://online.lexi.com/lco/action/doc/retrieve/docid/pdh_f/129791"
+      url = "https://online.lexi.com/lco/action/doc/retrieve/docid/pdh_f/129889"
       referenceLabel = "LEXICOMP - ADOL DROPS"
       break
 

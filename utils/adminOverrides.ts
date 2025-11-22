@@ -79,16 +79,25 @@ export function getOverrideForMedication(
     })),
   )
 
-  // Try to match by age with optional weight restrictions
+  const normalizedSearchName = medication.trim().toLowerCase().replace(/\s+/g, " ")
+
   if (ageInMonths !== undefined) {
-    const matches = overrides.filter(
-      (o) =>
-        o.medication === medication &&
-        o.minAgeMonths !== undefined &&
-        o.maxAgeMonths !== undefined &&
-        ageInMonths >= o.minAgeMonths &&
-        ageInMonths <= o.maxAgeMonths,
-    )
+    const matches = overrides.filter((o) => {
+      const normalizedOverrideName = o.medication.trim().toLowerCase().replace(/\s+/g, " ")
+      if (normalizedOverrideName !== normalizedSearchName) return false
+
+      // Check if any age restriction exists
+      const hasAgeRestriction = o.minAgeMonths !== undefined || o.maxAgeMonths !== undefined
+      if (!hasAgeRestriction) return false
+
+      // Check min age if defined
+      if (o.minAgeMonths !== undefined && ageInMonths < o.minAgeMonths) return false
+
+      // Check max age if defined
+      if (o.maxAgeMonths !== undefined && ageInMonths > o.maxAgeMonths) return false
+
+      return true
+    })
 
     console.log("[v0] Age-based matches found:", matches.length)
 
@@ -114,32 +123,34 @@ export function getOverrideForMedication(
     }
   }
 
-  // Try weight-only based match (no age restrictions)
   if (weightKg !== undefined) {
-    const weightMatch = overrides.find(
-      (o) =>
-        o.medication === medication &&
+    const weightMatch = overrides.find((o) => {
+      const normalizedOverrideName = o.medication.trim().toLowerCase().replace(/\s+/g, " ")
+      return (
+        normalizedOverrideName === normalizedSearchName &&
         (o.minWeightKg !== undefined || o.maxWeightKg !== undefined) &&
         o.minAgeMonths === undefined &&
         o.maxAgeMonths === undefined &&
         (o.minWeightKg === undefined || weightKg >= o.minWeightKg) &&
-        (o.maxWeightKg === undefined || weightKg <= o.maxWeightKg),
-    )
+        (o.maxWeightKg === undefined || weightKg <= o.maxWeightKg)
+      )
+    })
     if (weightMatch) {
       console.log("[v0] Found weight-only match!")
       return weightMatch
     }
   }
 
-  // General override (no age/weight restrictions)
-  const generalOverride = overrides.find(
-    (o) =>
-      o.medication === medication &&
+  const generalOverride = overrides.find((o) => {
+    const normalizedOverrideName = o.medication.trim().toLowerCase().replace(/\s+/g, " ")
+    return (
+      normalizedOverrideName === normalizedSearchName &&
       o.minAgeMonths === undefined &&
       o.maxAgeMonths === undefined &&
       o.minWeightKg === undefined &&
-      o.maxWeightKg === undefined,
-  )
+      o.maxWeightKg === undefined
+    )
+  })
 
   if (generalOverride) {
     console.log("[v0] Found general override!")
